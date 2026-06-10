@@ -47,20 +47,13 @@ Generate a GitHub Access Token with write permissions to the `.status` repositor
 7. In the app settings page, copy the **App ID**.
 8. Scroll down and click **Generate a private key**. Download the `.pem` private key file.
 9. Click **Install App** in the left menu, install it on your organization, and select access only to the `.status` repository.
-10. To use it in a workflow, use `actions/create-github-app-token` to generate a token at runtime:
-    ```yaml
-    - name: Generate status token
-      id: app-token
-      uses: actions/create-github-app-token@v1
-      with:
-        app-id: ${{ vars.STATUS_APP_ID }}
-        private-key: ${{ secrets.STATUS_APP_PRIVATE_KEY }}
-    ```
-    Then pass `${{ steps.app-token.outputs.token }}` as the `status_token` secret.
+
 
 ### 3. GitHub Organisation Settings
 * Create an organization **variable** named `STATUS_APP_ID` with the App ID as the value.
 * Create an organization **secret** named `STATUS_APP_PRIVATE_KEY` with the entire contents of the `.pem` private key file.
+
+These credentials will be passed directly to the reusable workflow, which handles token generation internally.
 
 ---
 

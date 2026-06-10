@@ -25,11 +25,15 @@ on:
         description: "Slack channel to post to (e.g., #build-status)"
         required: true
         type: string
+      status_app_id:
+        description: "GitHub App ID"
+        required: true
+        type: string
     secrets:
       slack_bot_token:
         required: true
-      status_token:
-        description: "GitHub PAT with write access to the .status repository"
+      status_app_private_key:
+        description: "GitHub App Private Key (.pem file contents)"
         required: true
 
 permissions:
@@ -477,11 +481,19 @@ jobs:
             exit 1
           fi
 
+      - name: Generate status token
+        id: app-token
+        if: always() && steps.decision.conclusion == 'success'
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ inputs.status_app_id }}
+          private-key: ${{ secrets.status_app_private_key }}
+
       - name: Store status in .status repository
         if: always() && steps.decision.conclusion == 'success'
         uses: actions/github-script@v8
         env:
-          STATUS_TOKEN: ${{ secrets.status_token }}
+          STATUS_TOKEN: ${{ steps.app-token.outputs.token }}
           PRODUCT: ${{ inputs.product }}
           NAME: ${{ inputs.name }}
           RUN_DETAILS_JSON: ${{ steps.decision.outputs.run_details_json }}

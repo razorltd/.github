@@ -29,12 +29,17 @@ A reusable workflow that posts Slack notifications for workflow run status chang
 - `slack_channel`: Target Slack channel (e.g., `#build-status` or ID).
 - `name`: A human-readable name/context, for example `Validation run`.
 - `product`: The name of the product (e.g., `DataQI`).
+- `status_app_id`: The GitHub App ID used to access the `.status` repository.
 
 ## Organisation Setup
+### Variables
+
+- `STATUS_APP_ID`: The GitHub App ID. Recommended to store this as an organisation variable. **Required**.
+
 ### Secrets
 
 - `slack_bot_token`: A Slack Bot User OAuth Token (`xoxb-...`) with `chat.postMessage`, `files:write`, and optionally `channels:read`/`groups:read` scopes. Recommended to store this as an organisation secret named `SLACK_BOT_TOKEN`. **Required**.
-- `status_token`: A Personal Access Token (PAT) with write access to the `.status` repository. Recommended to store this as an organisation secret named `STATUS_TOKEN`. **Required**.
+- `status_app_private_key`: The GitHub App private key (`.pem` file contents) with write access to the `.status` repository. Recommended to store this as an organisation secret named `STATUS_APP_PRIVATE_KEY`. **Required**.
 
 ### Required Manual Setup
 
