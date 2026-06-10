@@ -42,7 +42,7 @@ jobs:
     steps:
       - name: Determine whether Slack notification is required
         id: decision
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           CURRENT_RESULT: ${{ inputs.current_result }}
           REPORT_MODE: ${{ inputs.report-mode }}
@@ -149,11 +149,17 @@ jobs:
             --arg text "❌ ${CHANNEL_CONTEXT} failed\n${MENTION}\nRepository: ${REPOSITORY}\nWorkflow: ${WORKFLOW_NAME}\nRun: ${RUN_URL}" \
             '{channel: $channel, text: $text}')
           
-          curl -sS -X POST \
+          response=$(curl -sS -X POST \
             -H 'Content-type: application/json; charset=utf-8' \
             -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
             --data "$payload" \
-            "https://slack.com/api/chat.postMessage"
+            "https://slack.com/api/chat.postMessage")
+          
+          echo "Slack response: $response"
+          if [ "$(echo "$response" | jq -r '.ok')" != "true" ]; then
+            echo "Error: Slack API call failed!" >&2
+            exit 1
+          fi
 
       - name: Send Slack recovery notification
         if: steps.decision.outputs.notification_type == 'recovery'
@@ -172,8 +178,14 @@ jobs:
             --arg text "✅ ${CHANNEL_CONTEXT} ${STATUS_TEXT}\nRepository: ${REPOSITORY}\nWorkflow: ${WORKFLOW_NAME}\nRun: ${RUN_URL}" \
             '{channel: $channel, text: $text}')
           
-          curl -sS -X POST \
+          response=$(curl -sS -X POST \
             -H 'Content-type: application/json; charset=utf-8' \
             -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
             --data "$payload" \
-            "https://slack.com/api/chat.postMessage"
+            "https://slack.com/api/chat.postMessage")
+          
+          echo "Slack response: $response"
+          if [ "$(echo "$response" | jq -r '.ok')" != "true" ]; then
+            echo "Error: Slack API call failed!" >&2
+            exit 1
+          fi

@@ -21,7 +21,7 @@ Create a GitHub Actions organisation secret:
 
 ### 3. Invite Bot to Channels
 For each channel the bot should post to:
-- Invite the bot to the channel using `/invite @YourBotName` (required for private channels, recommended for public channels).
+- Invite the bot to the channel using `/invite @YourBotName` (required for private channels, recommended for public channels). If the bot is not in the channel, the Slack API will return `not_in_channel` and the GitHub Action will fail, alerting you to the setup issue.
 
 ---
 
