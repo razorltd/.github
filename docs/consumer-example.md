@@ -21,12 +21,12 @@ jobs:
           echo "Replace this with the actual nightly build"
 
   notify:
+    runs-on: ubuntu-slim
     needs:
       - build
     if: always()
     uses: YOUR_ORG/.github/.github/workflows/nightly-status-notify.yml@main
     with:
-      watched_workflow_name: Nightly Validation
       current_result: ${{ needs.build.result }}
       channel_context: Nightly build
       mention_on_failure: "<!subteam^REPLACE_WITH_SLACK_USER_GROUP_ID>"
