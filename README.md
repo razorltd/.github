@@ -16,6 +16,13 @@ A reusable workflow that posts Slack notifications for workflow run status chang
 [action](./.github/workflows/rzr-notify-status.yml)
 [example](./docs/consumer-example.md)
 
+### Optional Inputs
+
+- `report-mode`: Determines when to send notifications. Options:
+  - `on-change` (default): Only notify when the state changes (failure -> success, success -> failure).
+  - `all`: Send a notification on every run (success or failure).
+  - `all-failures`: Send a notification on every failure, and on recovery.
+
 ## Organisation Setup
 ### Secrets
 

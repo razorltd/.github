@@ -17,6 +17,11 @@ on:
         required: false
         default: "Workflow run"
         type: string
+      report-mode:
+        description: "Notification mode: on-change (default), all, all-failures"
+        required: false
+        default: "on-change"
+        type: string
     secrets:
       slack_webhook_url:
         required: true
@@ -33,11 +38,21 @@ jobs:
       - name: Determine whether Slack notification is required
         id: decision
         uses: actions/github-script@v7
+        env:
+          CURRENT_RESULT: ${{ inputs.current_result }}
+          REPORT_MODE: ${{ inputs.report-mode }}
         with:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const currentResult = core.getInput('current_result');
+            const currentResult = process.env.CURRENT_RESULT;
+            const reportMode = process.env.REPORT_MODE;
+
+            const validModes = ['on-change', 'all', 'all-failures'];
+            if (!validModes.includes(reportMode)) {
+              core.setFailed(`Invalid report-mode: ${reportMode}. Must be one of: ${validModes.join(', ')}`);
+              return;
+            }
 
             const currentRun = await github.rest.actions.getWorkflowRun({
               owner,
@@ -60,16 +75,25 @@ jobs:
             const previousConclusion = previousRun?.conclusion || 'unknown';
 
             let notificationType = 'none';
+            let statusText = 'recovered';
 
-            if (currentResult === 'failure' && previousConclusion !== 'failure') {
-              notificationType = 'failure';
-            }
-
-            if (currentResult === 'success' && previousConclusion === 'failure') {
-              notificationType = 'recovery';
+            if (currentResult === 'failure') {
+              if (reportMode === 'all' || reportMode === 'all-failures') {
+                notificationType = 'failure';
+              } else if (reportMode === 'on-change' && previousConclusion !== 'failure') {
+                notificationType = 'failure';
+              }
+            } else if (currentResult === 'success') {
+              if (reportMode === 'all') {
+                notificationType = 'recovery';
+                statusText = previousConclusion === 'failure' ? 'recovered' : 'succeeded';
+              } else if ((reportMode === 'on-change' || reportMode === 'all-failures') && previousConclusion === 'failure') {
+                notificationType = 'recovery';
+              }
             }
 
             core.setOutput('notification_type', notificationType);
+            core.setOutput('status_text', statusText);
             core.setOutput('previous_conclusion', previousConclusion);
 
       - name: Send Slack failure notification
@@ -101,9 +125,10 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           WORKFLOW_NAME: ${{ github.workflow }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          STATUS_TEXT: ${{ steps.decision.outputs.status_text }}
         run: |
           payload=$(jq -n \
-            --arg text "✅ ${CHANNEL_CONTEXT} recovered\nRepository: ${REPOSITORY}\nWorkflow: ${WORKFLOW_NAME}\nRun: ${RUN_URL}" \
+            --arg text "✅ ${CHANNEL_CONTEXT} ${STATUS_TEXT}\nRepository: ${REPOSITORY}\nWorkflow: ${WORKFLOW_NAME}\nRun: ${RUN_URL}" \
             '{text: $text}')
 
           curl -sS -X POST \
