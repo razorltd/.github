@@ -2,6 +2,10 @@
 
 Here is an example of how to use the RZR Status Notify reusable workflow in your own repositories.
 
+## Using Slack Bot Token
+
+This setup dynamically routes notifications to a specific Slack channel using a single organisation-wide Slack Bot Token.
+
 ```yaml
 name: Validation
 
@@ -15,10 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Run build and tests
-        run: |
-          echo "Replace this with the actual build"
+        run: echo "Replace this with the actual build"
 
   notify:
     runs-on: ubuntu-slim
@@ -29,9 +31,10 @@ jobs:
     with:
       current_result: ${{ needs.build.result }}
       channel_context: Validation run
+      slack_channel: "#team-a-builds" # Target channel
       mention_on_failure: "<!subteam^REPLACE_WITH_SLACK_USER_GROUP_ID>"
     secrets:
-      slack_webhook_url: ${{ secrets.SLACK_BUILD_WEBHOOK }}
+      slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
 ```
 
-**Note**: `notify` must be a separate final job using `if: always()` so it runs after success or failure of the preceding jobs.
+**Note**: The `notify` job must be a separate final job using `if: always()` so it runs after success or failure of the preceding jobs.

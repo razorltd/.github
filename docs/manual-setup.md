@@ -1,45 +1,35 @@
 # Manual setup required
 
-The following manual setup steps must be completed to enable Slack notifications.
+The following manual setup steps must be completed to enable Slack notifications. We use the **Slack Bot Token** method which allows a single Slack App token to post to any channel dynamically.
 
-### 1. Slack App and Webhook
+---
 
-The user must:
-* Create or select a Slack app.
-* Enable Incoming Webhooks.
-* Add a webhook for the target Slack channel, probably `#build-status`.
-* Copy the webhook URL.
+## Slack Bot Token Setup
+
+### 1. Create Slack App & Token
+1. Go to the [Slack App Directory](https://api.slack.com/apps) and click **Create New App** -> **From scratch**.
+2. Under **OAuth & Permissions**, scroll down to **Scopes** -> **Bot Token Scopes** and add:
+   - `chat.postMessage`
+3. Click **Install to Workspace** at the top of the page.
+4. Copy the **Bot User OAuth Token** (starts with `xoxb-`).
 
 ### 2. GitHub Organisation Secret
+Create a GitHub Actions organisation secret:
+* **Name**: `SLACK_BOT_TOKEN`
+* **Value**: The `xoxb-` token.
+* **Access policy**: `Selected repositories` or `All repositories`.
 
-The user must create a GitHub Actions organisation secret:
+### 3. Invite Bot to Channels
+For each channel the bot should post to:
+- Invite the bot to the channel using `/invite @YourBotName` (required for private channels, recommended for public channels).
 
-`SLACK_BUILD_WEBHOOK`
+---
 
-Value:
+## General Configurations
 
-`the Slack webhook URL`
-
-Access policy:
-
-`Selected repositories`
-
-or:
-
-`All repositories`
-
-depending on organisational preference.
-
-### 3. Slack Mention Target
-
-If failures should mention a group, the user must provide the Slack user group ID.
-
-Preferred format:
-
+### 1. Slack Mention Target
+If failures should mention a Slack User Group, locate the Group ID in Slack and format it like:
 `<!subteam^GROUP_ID>`
 
-(Replace GROUP_ID with the actual group ID)
-
-### 4. Consumer Repository Rollout
-
-The user or a repo-maintenance agent must update each nightly workflow to add the final `notify` job.
+### 2. Consumer Repository Rollout
+Update your workflow in each target repository to add the final `notify` job. Refer to `docs/consumer-example.md` for a configuration example.
