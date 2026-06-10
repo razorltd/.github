@@ -47,6 +47,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Generate status token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ inputs.status_app_id }}
+          private-key: ${{ secrets.status_app_private_key }}
+          repositories: ".status"
+
       - name: Determine whether Slack notification is required
         id: decision
         uses: actions/github-script@v8
@@ -56,6 +64,8 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.slack_bot_token }}
           SLACK_CHANNEL: ${{ inputs.slack_channel }}
           NAME: ${{ inputs.name }}
+          PRODUCT: ${{ inputs.product }}
+          STATUS_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
           script: |
             const owner = context.repo.owner;
@@ -110,20 +120,36 @@ jobs:
               repo,
               run_id: context.runId
             });
-            const workflowId = currentRun.data.workflow_id;
 
-            const runs = await github.rest.actions.listWorkflowRuns({
-              owner,
-              repo,
-              workflow_id: workflowId,
-              status: 'completed',
-              per_page: 10
-            });
+            const workflowSlug = process.env.NAME.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+            const statusToken = process.env.STATUS_TOKEN;
+            let previousConclusion = 'unknown';
 
-            const currentRunId = context.runId;
+            if (statusToken) {
+              try {
+                const statusOctokit = github.getOctokit(statusToken);
+                const path = `${process.env.PRODUCT}/${workflowSlug}.status`;
+                const response = await statusOctokit.rest.repos.getContent({
+                  owner: owner,
+                  repo: '.status',
+                  path: path
+                });
 
-            const previousRun = runs.data.workflow_runs.find(r => r.id !== currentRunId);
-            const previousConclusion = previousRun?.conclusion || 'unknown';
+                if (response.data && response.data.content) {
+                  const content = Buffer.from(response.data.content, 'base64').toString('utf8');
+                  const parsed = JSON.parse(content);
+                  if (typeof parsed.isFailure === 'boolean') {
+                    previousConclusion = parsed.isFailure ? 'failure' : 'success';
+                  } else {
+                    previousConclusion = parsed.status || 'unknown';
+                  }
+                }
+              } catch (e) {
+                core.info(`Could not fetch previous status from .status repo: ${e.message}`);
+              }
+            } else {
+              core.info('No statusToken provided, cannot check .status repo for previous conclusion.');
+            }
 
             let notificationType = 'none';
             let statusText = 'recovered';
@@ -480,15 +506,6 @@ jobs:
             exit 1
           fi
 
-      - name: Generate status token
-        id: app-token
-        if: always() && steps.decision.conclusion == 'success'
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ inputs.status_app_id }}
-          private-key: ${{ secrets.status_app_private_key }}
-          repositories: ".status"
-
       - name: Store status in .status repository
         if: always() && steps.decision.conclusion == 'success'
         uses: actions/github-script@v8
@@ -564,6 +581,8 @@ jobs:
 
                 const newStatus = {
                   name: name,
+                  status: runDetails.status,
+                  isFailure: runDetails.status === 'failure',
                   runId: runDetails.run_id,
                   runNumber: runNumber,
                   timestamp: runDetails.started_at,
