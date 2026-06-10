@@ -57,7 +57,7 @@ jobs:
 
       - name: Determine whether Slack notification is required
         id: decision
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           CURRENT_RESULT: ${{ inputs.current_result }}
           REPORT_MODE: ${{ inputs.report-mode }}
@@ -526,7 +526,7 @@ jobs:
 
       - name: Store status in .status repository
         if: always() && steps.decision.conclusion == 'success'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           STATUS_TOKEN: ${{ steps.app-token.outputs.token }}
           PRODUCT: ${{ inputs.product }}
