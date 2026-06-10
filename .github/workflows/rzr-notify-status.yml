@@ -262,13 +262,12 @@ jobs:
           WORKFLOW_NAME: ${{ github.workflow }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           RUN_ID: ${{ github.run_id }}
-          REASONING: ${{ steps.decision.outputs.reasoning }}
           FAILED_JOBS_INLINE: ${{ steps.decision.outputs.failed_jobs_inline }}
           MEANING: ${{ steps.decision.outputs.meaning }}
           PREVIOUS_CONCLUSION: ${{ steps.decision.outputs.previous_conclusion }}
         run: |
           NL=$'\n'
-          comment="❌ *${CHANNEL_CONTEXT} failed*${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}${FAILED_JOBS_INLINE}> *Reasoning:* ${REASONING}${NL}> *What this means:* ${MEANING}"
+          comment="❌ *${CHANNEL_CONTEXT} failed*${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}${FAILED_JOBS_INLINE}> *What this means:* ${MEANING}"
 
           # Try uploading the job summary file to Slack V2 API
           if [ -f "job_summary.txt" ]; then
@@ -339,12 +338,11 @@ jobs:
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           RUN_ID: ${{ github.run_id }}
           STATUS_TEXT: ${{ steps.decision.outputs.status_text }}
-          REASONING: ${{ steps.decision.outputs.reasoning }}
           MEANING: ${{ steps.decision.outputs.meaning }}
           PREVIOUS_CONCLUSION: ${{ steps.decision.outputs.previous_conclusion }}
         run: |
           NL=$'\n'
-          comment="✅ *${CHANNEL_CONTEXT} ${STATUS_TEXT}*${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}> *Reasoning:* ${REASONING}${NL}> *What this means:* ${MEANING}"
+          comment="✅ *${CHANNEL_CONTEXT} ${STATUS_TEXT}*${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}> *What this means:* ${MEANING}"
 
           # Try uploading the job summary file to Slack V2 API
           if [ -f "job_summary.txt" ]; then
