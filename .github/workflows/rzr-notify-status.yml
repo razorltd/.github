@@ -22,8 +22,12 @@ on:
         required: false
         default: "on-change"
         type: string
+      slack_channel:
+        description: "Slack channel to post to (e.g., #build-status)"
+        required: true
+        type: string
     secrets:
-      slack_webhook_url:
+      slack_bot_token:
         required: true
 
 permissions:
@@ -41,12 +45,25 @@ jobs:
         env:
           CURRENT_RESULT: ${{ inputs.current_result }}
           REPORT_MODE: ${{ inputs.report-mode }}
+          SLACK_BOT_TOKEN: ${{ secrets.slack_bot_token }}
+          SLACK_CHANNEL: ${{ inputs.slack_channel }}
         with:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const currentResult = process.env.CURRENT_RESULT;
             const reportMode = process.env.REPORT_MODE;
+            const botToken = process.env.SLACK_BOT_TOKEN;
+            const channel = process.env.SLACK_CHANNEL;
+
+            if (!botToken) {
+              core.setFailed("Secret 'slack_bot_token' is required.");
+              return;
+            }
+            if (!channel) {
+              core.setFailed("Input 'slack_channel' is required.");
+              return;
+            }
 
             const validModes = ['on-change', 'all', 'all-failures'];
             if (!validModes.includes(reportMode)) {
@@ -100,7 +117,8 @@ jobs:
         if: steps.decision.outputs.notification_type == 'failure'
         shell: bash
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.slack_webhook_url }}
+          SLACK_BOT_TOKEN: ${{ secrets.slack_bot_token }}
+          SLACK_CHANNEL: ${{ inputs.slack_channel }}
           MENTION: ${{ inputs.mention_on_failure }}
           CHANNEL_CONTEXT: ${{ inputs.channel_context }}
           REPOSITORY: ${{ github.repository }}
@@ -108,19 +126,22 @@ jobs:
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           payload=$(jq -n \
+            --arg channel "$SLACK_CHANNEL" \
             --arg text "❌ ${CHANNEL_CONTEXT} failed\n${MENTION}\nRepository: ${REPOSITORY}\nWorkflow: ${WORKFLOW_NAME}\nRun: ${RUN_URL}" \
-            '{text: $text}')
-
+            '{channel: $channel, text: $text}')
+          
           curl -sS -X POST \
-            -H 'Content-type: application/json' \
+            -H 'Content-type: application/json; charset=utf-8' \
+            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
             --data "$payload" \
-            "$SLACK_WEBHOOK_URL"
+            "https://slack.com/api/chat.postMessage"
 
       - name: Send Slack recovery notification
         if: steps.decision.outputs.notification_type == 'recovery'
         shell: bash
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.slack_webhook_url }}
+          SLACK_BOT_TOKEN: ${{ secrets.slack_bot_token }}
+          SLACK_CHANNEL: ${{ inputs.slack_channel }}
           CHANNEL_CONTEXT: ${{ inputs.channel_context }}
           REPOSITORY: ${{ github.repository }}
           WORKFLOW_NAME: ${{ github.workflow }}
@@ -128,10 +149,12 @@ jobs:
           STATUS_TEXT: ${{ steps.decision.outputs.status_text }}
         run: |
           payload=$(jq -n \
+            --arg channel "$SLACK_CHANNEL" \
             --arg text "✅ ${CHANNEL_CONTEXT} ${STATUS_TEXT}\nRepository: ${REPOSITORY}\nWorkflow: ${WORKFLOW_NAME}\nRun: ${RUN_URL}" \
-            '{text: $text}')
-
+            '{channel: $channel, text: $text}')
+          
           curl -sS -X POST \
-            -H 'Content-type: application/json' \
+            -H 'Content-type: application/json; charset=utf-8' \
+            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
             --data "$payload" \
-            "$SLACK_WEBHOOK_URL"
+            "https://slack.com/api/chat.postMessage"

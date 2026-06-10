@@ -22,11 +22,12 @@ A reusable workflow that posts Slack notifications for workflow run status chang
   - `on-change` (default): Only notify when the state changes (failure -> success, success -> failure).
   - `all`: Send a notification on every run (success or failure).
   - `all-failures`: Send a notification on every failure, and on recovery.
+- `slack_channel`: Target Slack channel (e.g., `#build-status` or ID). **Required**.
 
 ## Organisation Setup
 ### Secrets
 
-- `slack_webhook_url`: A Slack Incoming Webhook URL. It's recommended to store this as an organisation secret named `SLACK_BUILD_WEBHOOK`.
+- `slack_bot_token`: A Slack Bot User OAuth Token (`xoxb-...`) with `chat.postMessage` scope. Recommended to store this as an organisation secret named `SLACK_BOT_TOKEN`. **Required**.
 
 ### Required Manual Setup
 
