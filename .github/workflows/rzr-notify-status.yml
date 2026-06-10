@@ -137,7 +137,7 @@ jobs:
 
             if (statusToken) {
               try {
-                const statusOctokit = github.getOctokit(statusToken);
+                const statusOctokit = getOctokit(statusToken);
                 const path = `${process.env.PRODUCT}/${workflowSlug}.status`;
                 const response = await statusOctokit.rest.repos.getContent({
                   owner: owner,
