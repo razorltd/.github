@@ -8,11 +8,6 @@ on:
         required: false
         default: ""
         type: string
-      mention_on_failure:
-        description: "Optional Slack mention, for example <!subteam^ID> or @here"
-        required: false
-        default: ""
-        type: string
       channel_context:
         description: "Optional human-readable context, for example Workflow run"
         required: false
@@ -262,7 +257,6 @@ jobs:
         env:
           SLACK_BOT_TOKEN: ${{ secrets.slack_bot_token }}
           SLACK_CHANNEL: ${{ inputs.slack_channel }}
-          MENTION: ${{ inputs.mention_on_failure }}
           CHANNEL_CONTEXT: ${{ inputs.channel_context }}
           REPOSITORY: ${{ github.repository }}
           WORKFLOW_NAME: ${{ github.workflow }}
@@ -274,15 +268,7 @@ jobs:
           PREVIOUS_CONCLUSION: ${{ steps.decision.outputs.previous_conclusion }}
         run: |
           NL=$'\n'
-          if [ "$MENTION" = "@here" ]; then
-            MENTION="<!here>"
-          elif [ "$MENTION" = "@channel" ]; then
-            MENTION="<!channel>"
-          elif [ "$MENTION" = "@everyone" ]; then
-            MENTION="<!everyone>"
-          fi
-
-          comment="❌ *${CHANNEL_CONTEXT} failed*${NL}${MENTION}${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}${FAILED_JOBS_INLINE}> *Reasoning:* ${REASONING}${NL}> *What this means:* ${MEANING}"
+          comment="❌ *${CHANNEL_CONTEXT} failed*${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}${FAILED_JOBS_INLINE}> *Reasoning:* ${REASONING}${NL}> *What this means:* ${MEANING}"
 
           # Try uploading the job summary file to Slack V2 API
           if [ -f "job_summary.txt" ]; then

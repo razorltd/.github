@@ -28,9 +28,5 @@ For each channel the bot should post to:
 
 ## General Configurations
 
-### 1. Slack Mention Target
-If failures should mention a Slack User Group, locate the Group ID in Slack and format it like:
-`<!subteam^GROUP_ID>`
-
-### 2. Consumer Repository Rollout
+### 1. Consumer Repository Rollout
 Update your workflow in each target repository to add the final `notify` job. Refer to `docs/consumer-example.md` for a configuration example.

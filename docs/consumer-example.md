@@ -36,7 +36,6 @@ jobs:
     with:
       channel_context: Validation run
       slack_channel: "#team-a-builds" # Target channel
-      mention_on_failure: "<!subteam^REPLACE_WITH_SLACK_USER_GROUP_ID>"
     secrets:
       slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
 ```
@@ -76,7 +75,6 @@ jobs:
       current_result: ${{ needs.build.result }}
       channel_context: Validation run
       slack_channel: "#team-a-builds" # Target channel
-      mention_on_failure: "<!subteam^REPLACE_WITH_SLACK_USER_GROUP_ID>"
     secrets:
       slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
 ```
