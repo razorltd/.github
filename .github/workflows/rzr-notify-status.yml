@@ -273,6 +273,27 @@ jobs:
           NL=$'\n'
           comment="❌ *${NAME} failed*${NL}> *Product:* ${PRODUCT}${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}${FAILED_JOBS_INLINE}> *What this means:* ${MEANING}"
 
+          # Look up channel ID if channel name is provided (starting with #)
+          CHANNEL_ID="$SLACK_CHANNEL"
+          if [[ "$CHANNEL_ID" == "#"* ]]; then
+            CLEAN_NAME="${CHANNEL_ID#\#}"
+            echo "Looking up ID for channel $CHANNEL_ID..."
+            list_res=$(curl -sS -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+              "https://slack.com/api/conversations.list?types=public_channel,private_channel&exclude_members=true&limit=1000")
+            
+            if [ "$(echo "$list_res" | jq -r '.ok')" = "true" ]; then
+              matched_id=$(echo "$list_res" | jq -r --arg name "$CLEAN_NAME" '.channels[] | select(.name == $name) | .id')
+              if [ -n "$matched_id" ] && [ "$matched_id" != "null" ]; then
+                CHANNEL_ID="$matched_id"
+                echo "Found matched Channel ID: $CHANNEL_ID"
+              else
+                echo "Warning: could not find channel with name $CLEAN_NAME in Slack list. Using original value."
+              fi
+            else
+              echo "Warning: conversations.list failed: $list_res"
+            fi
+          fi
+
           # Try uploading the job summary file to Slack V2 API
           if [ -f "job_summary.txt" ]; then
             echo "Getting Slack upload URL..."
@@ -295,7 +316,7 @@ jobs:
                 -H "Content-type: application/json; charset=utf-8" \
                 -d "$(jq -n \
                   --arg file_id "$file_id" \
-                  --arg channel "$SLACK_CHANNEL" \
+                  --arg channel "$CHANNEL_ID" \
                   --arg comment "$comment" \
                   '{files: [{id: $file_id, title: "job_summary.txt"}], channel_id: $channel, initial_comment: $comment}')" \
                 https://slack.com/api/files.completeUploadExternal)
@@ -349,6 +370,27 @@ jobs:
           NL=$'\n'
           comment="✅ *${NAME} ${STATUS_TEXT}*${NL}> *Product:* ${PRODUCT}${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}> *What this means:* ${MEANING}"
 
+          # Look up channel ID if channel name is provided (starting with #)
+          CHANNEL_ID="$SLACK_CHANNEL"
+          if [[ "$CHANNEL_ID" == "#"* ]]; then
+            CLEAN_NAME="${CHANNEL_ID#\#}"
+            echo "Looking up ID for channel $CHANNEL_ID..."
+            list_res=$(curl -sS -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+              "https://slack.com/api/conversations.list?types=public_channel,private_channel&exclude_members=true&limit=1000")
+            
+            if [ "$(echo "$list_res" | jq -r '.ok')" = "true" ]; then
+              matched_id=$(echo "$list_res" | jq -r --arg name "$CLEAN_NAME" '.channels[] | select(.name == $name) | .id')
+              if [ -n "$matched_id" ] && [ "$matched_id" != "null" ]; then
+                CHANNEL_ID="$matched_id"
+                echo "Found matched Channel ID: $CHANNEL_ID"
+              else
+                echo "Warning: could not find channel with name $CLEAN_NAME in Slack list. Using original value."
+              fi
+            else
+              echo "Warning: conversations.list failed: $list_res"
+            fi
+          fi
+
           # Try uploading the job summary file to Slack V2 API
           if [ -f "job_summary.txt" ]; then
             echo "Getting Slack upload URL..."
@@ -371,7 +413,7 @@ jobs:
                 -H "Content-type: application/json; charset=utf-8" \
                 -d "$(jq -n \
                   --arg file_id "$file_id" \
-                  --arg channel "$SLACK_CHANNEL" \
+                  --arg channel "$CHANNEL_ID" \
                   --arg comment "$comment" \
                   '{files: [{id: $file_id, title: "job_summary.txt"}], channel_id: $channel, initial_comment: $comment}')" \
                 https://slack.com/api/files.completeUploadExternal)
