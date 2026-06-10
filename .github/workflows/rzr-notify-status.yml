@@ -501,7 +501,6 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
-            const exec = require('@actions/exec');
 
             const statusToken = process.env.STATUS_TOKEN;
             const product = process.env.PRODUCT;
