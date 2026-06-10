@@ -488,6 +488,7 @@ jobs:
         with:
           app-id: ${{ inputs.status_app_id }}
           private-key: ${{ secrets.status_app_private_key }}
+          repositories: ".status"
 
       - name: Store status in .status repository
         if: always() && steps.decision.conclusion == 'success'
