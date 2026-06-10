@@ -167,6 +167,71 @@ jobs:
               }
             }
 
+            function formatDuration(startedAt, completedAt) {
+              if (!startedAt || !completedAt) return '0s';
+              const start = new Date(startedAt);
+              const end = new Date(completedAt);
+              const diffMs = end - start;
+              if (isNaN(diffMs) || diffMs < 0) return '0s';
+              
+              const totalSecs = Math.floor(diffMs / 1000);
+              const mins = Math.floor(totalSecs / 60);
+              const secs = totalSecs % 60;
+              
+              if (mins > 0) {
+                return `${mins}m ${secs}s`;
+              }
+              return `${secs}s`;
+            }
+
+            // Generate detailed job summary report
+            let reportLines = [];
+            reportLines.push("======================================================================");
+            reportLines.push(`WORKFLOW RUN JOB SUMMARY (Run ID: ${context.runId})`);
+            reportLines.push(`Repository: ${owner}/${repo}`);
+            reportLines.push(`Triggered by: ${context.actor}`);
+            reportLines.push("======================================================================\n");
+
+            for (const job of jobs) {
+              const duration = formatDuration(job.started_at, job.completed_at);
+              const status = (job.conclusion || job.status || 'unknown').toUpperCase();
+              
+              reportLines.push(`Job Name:  ${job.name}`);
+              reportLines.push(`Status:    ${status}`);
+              reportLines.push(`Duration:  ${duration}`);
+              
+              if (job.conclusion === 'failure' || job.conclusion === 'timed_out') {
+                const failedStep = job.steps?.find(s => s.conclusion === 'failure' || s.conclusion === 'timed_out');
+                let errorInfo = failedStep ? `Failed at step: "${failedStep.name}"` : 'Failed (reason unknown)';
+                
+                try {
+                  const annotations = await github.rest.checks.listAnnotations({
+                    owner,
+                    repo,
+                    check_run_id: job.id
+                  });
+                  if (annotations.data && annotations.data.length > 0) {
+                    errorInfo += "\nAnnotations:";
+                    for (const ann of annotations.data) {
+                      errorInfo += `\n  - [${ann.annotation_level}] ${ann.path || 'unknown'}:${ann.start_line || 0} - ${ann.message}`;
+                    }
+                  }
+                } catch (err) {
+                  // Ignore error fetching annotations
+                }
+                reportLines.push(`Error Info:\n${errorInfo}`);
+              }
+              reportLines.push("----------------------------------------------------------------------");
+            }
+
+            const fs = require('fs');
+            fs.writeFileSync('job_summary.txt', reportLines.join('\n'));
+
+            let failedJobsInline = '';
+            if (failedJobs.length > 0) {
+              failedJobsInline = `> *Failed Jobs:*\n` + failedJobs.map(name => `> • ${name}`).join('\n') + '\n';
+            }
+
             let jobSummary = `Passed: ${passedJobs.length} | Failed: ${failedJobs.length} | Skipped: ${skippedJobs.length}`;
             if (failedJobs.length > 0) {
               jobSummary += ` (Failed: ${failedJobs.join(', ')})`;
@@ -188,6 +253,7 @@ jobs:
             core.setOutput('reasoning', reasoning);
             core.setOutput('job_summary', jobSummary);
             core.setOutput('meaning', meaning);
+            core.setOutput('failed_jobs_inline', failedJobsInline);
 
       - name: Send Slack failure notification
         if: steps.decision.outputs.notification_type == 'failure'
@@ -202,7 +268,7 @@ jobs:
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           RUN_ID: ${{ github.run_id }}
           REASONING: ${{ steps.decision.outputs.reasoning }}
-          JOB_SUMMARY: ${{ steps.decision.outputs.job_summary }}
+          FAILED_JOBS_INLINE: ${{ steps.decision.outputs.failed_jobs_inline }}
           MEANING: ${{ steps.decision.outputs.meaning }}
           PREVIOUS_CONCLUSION: ${{ steps.decision.outputs.previous_conclusion }}
         run: |
@@ -215,9 +281,51 @@ jobs:
             MENTION="<!everyone>"
           fi
 
+          comment="❌ *${CHANNEL_CONTEXT} failed*${NL}${MENTION}${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}${FAILED_JOBS_INLINE}> *Reasoning:* ${REASONING}${NL}> *What this means:* ${MEANING}"
+
+          # Try uploading the job summary file to Slack V2 API
+          if [ -f "job_summary.txt" ]; then
+            echo "Getting Slack upload URL..."
+            res=$(curl -sS -X POST \
+              -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+              -d "filename=job_summary.txt" \
+              -d "length=$(wc -c < job_summary.txt)" \
+              https://slack.com/api/files.getUploadURLExternal)
+            
+            if [ "$(echo "$res" | jq -r '.ok')" = "true" ]; then
+              upload_url=$(echo "$res" | jq -r '.upload_url')
+              file_id=$(echo "$res" | jq -r '.file_id')
+              
+              echo "Uploading file content..."
+              curl -sS -F "file=@job_summary.txt" "$upload_url"
+              
+              echo "Completing upload..."
+              complete_res=$(curl -sS -X POST \
+                -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+                -H "Content-type: application/json; charset=utf-8" \
+                -d "$(jq -n \
+                  --arg file_id "$file_id" \
+                  --arg channel "$SLACK_CHANNEL" \
+                  --arg comment "$comment" \
+                  '{files: [{id: $file_id, title: "job_summary.txt"}], channel_id: $channel, initial_comment: $comment}')" \
+                https://slack.com/api/files.completeUploadExternal)
+              
+              echo "Slack response: $complete_res"
+              if [ "$(echo "$complete_res" | jq -r '.ok')" = "true" ]; then
+                exit 0
+              else
+                echo "Warning: files.completeUploadExternal failed: $complete_res"
+              fi
+            else
+              echo "Warning: files.getUploadURLExternal failed: $res"
+            fi
+          fi
+
+          # Fallback: Send message only via chat.postMessage
+          echo "Falling back to text-only message..."
           payload=$(jq -n \
             --arg channel "$SLACK_CHANNEL" \
-            --arg text "❌ *${CHANNEL_CONTEXT} failed*${NL}${MENTION}${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}> *Job Summary:* ${JOB_SUMMARY}${NL}> *Reasoning:* ${REASONING}${NL}> *What this means:* ${MEANING}" \
+            --arg text "$comment" \
             '{channel: $channel, text: $text}')
           
           response=$(curl -sS -X POST \
@@ -245,14 +353,55 @@ jobs:
           RUN_ID: ${{ github.run_id }}
           STATUS_TEXT: ${{ steps.decision.outputs.status_text }}
           REASONING: ${{ steps.decision.outputs.reasoning }}
-          JOB_SUMMARY: ${{ steps.decision.outputs.job_summary }}
           MEANING: ${{ steps.decision.outputs.meaning }}
           PREVIOUS_CONCLUSION: ${{ steps.decision.outputs.previous_conclusion }}
         run: |
           NL=$'\n'
+          comment="✅ *${CHANNEL_CONTEXT} ${STATUS_TEXT}*${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}> *Reasoning:* ${REASONING}${NL}> *What this means:* ${MEANING}"
+
+          # Try uploading the job summary file to Slack V2 API
+          if [ -f "job_summary.txt" ]; then
+            echo "Getting Slack upload URL..."
+            res=$(curl -sS -X POST \
+              -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+              -d "filename=job_summary.txt" \
+              -d "length=$(wc -c < job_summary.txt)" \
+              https://slack.com/api/files.getUploadURLExternal)
+            
+            if [ "$(echo "$res" | jq -r '.ok')" = "true" ]; then
+              upload_url=$(echo "$res" | jq -r '.upload_url')
+              file_id=$(echo "$res" | jq -r '.file_id')
+              
+              echo "Uploading file content..."
+              curl -sS -F "file=@job_summary.txt" "$upload_url"
+              
+              echo "Completing upload..."
+              complete_res=$(curl -sS -X POST \
+                -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+                -H "Content-type: application/json; charset=utf-8" \
+                -d "$(jq -n \
+                  --arg file_id "$file_id" \
+                  --arg channel "$SLACK_CHANNEL" \
+                  --arg comment "$comment" \
+                  '{files: [{id: $file_id, title: "job_summary.txt"}], channel_id: $channel, initial_comment: $comment}')" \
+                https://slack.com/api/files.completeUploadExternal)
+              
+              echo "Slack response: $complete_res"
+              if [ "$(echo "$complete_res" | jq -r '.ok')" = "true" ]; then
+                exit 0
+              else
+                echo "Warning: files.completeUploadExternal failed: $complete_res"
+              fi
+            else
+              echo "Warning: files.getUploadURLExternal failed: $res"
+            fi
+          fi
+
+          # Fallback: Send message only via chat.postMessage
+          echo "Falling back to text-only message..."
           payload=$(jq -n \
             --arg channel "$SLACK_CHANNEL" \
-            --arg text "✅ *${CHANNEL_CONTEXT} ${STATUS_TEXT}*${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}> *Job Summary:* ${JOB_SUMMARY}${NL}> *Reasoning:* ${REASONING}${NL}> *What this means:* ${MEANING}" \
+            --arg text "$comment" \
             '{channel: $channel, text: $text}')
           
           response=$(curl -sS -X POST \
