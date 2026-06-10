@@ -10,6 +10,7 @@ The following manual setup steps must be completed to enable Slack notifications
 1. Go to the [Slack App Directory](https://api.slack.com/apps) and click **Create New App** -> **From scratch**.
 2. Under **OAuth & Permissions**, scroll down to **Scopes** -> **Bot Token Scopes** and add:
    - `chat.postMessage`
+   - `files:write` (Required for uploading detailed job summaries as attachments)
 3. Click **Install to Workspace** at the top of the page.
 4. Copy the **Bot User OAuth Token** (starts with `xoxb-`).
 

@@ -17,6 +17,7 @@ on:
 permissions:
   actions: read
   contents: read
+  checks: read
 
 jobs:
   build:
@@ -55,6 +56,7 @@ on:
 permissions:
   actions: read
   contents: read
+  checks: read
 
 jobs:
   build:
