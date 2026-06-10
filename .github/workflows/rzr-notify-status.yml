@@ -4,8 +4,9 @@ on:
   workflow_call:
     inputs:
       current_result:
-        description: "Current workflow result from the caller, usually needs.<job>.result"
-        required: true
+        description: "Optional current workflow result (e.g., success, failure). If omitted, automatically determined by scanning all jobs in the run."
+        required: false
+        default: ""
         type: string
       mention_on_failure:
         description: "Optional Slack mention, for example <!subteam^ID> or @here"
@@ -51,7 +52,7 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const currentResult = process.env.CURRENT_RESULT;
+            const currentResultInput = process.env.CURRENT_RESULT;
             const reportMode = process.env.REPORT_MODE;
             const botToken = process.env.SLACK_BOT_TOKEN;
             const channel = process.env.SLACK_CHANNEL;
@@ -69,6 +70,24 @@ jobs:
             if (!validModes.includes(reportMode)) {
               core.setFailed(`Invalid report-mode: ${reportMode}. Must be one of: ${validModes.join(', ')}`);
               return;
+            }
+
+            let currentResult = currentResultInput;
+            if (!currentResult) {
+              const jobs = await github.rest.actions.listJobsForWorkflowRun({
+                owner,
+                repo,
+                run_id: context.runId,
+                per_page: 100
+              });
+              const anyFailure = jobs.data.jobs.some(j => j.conclusion === 'failure' || j.conclusion === 'timed_out');
+              currentResult = anyFailure ? 'failure' : 'success';
+            } else {
+              const validResults = ['success', 'failure', 'cancelled', 'skipped'];
+              if (!validResults.includes(currentResult)) {
+                core.setFailed(`Invalid current_result: ${currentResult}. Must be one of: ${validResults.join(', ')}`);
+                return;
+              }
             }
 
             const currentRun = await github.rest.actions.getWorkflowRun({

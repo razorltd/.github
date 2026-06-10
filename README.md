@@ -22,6 +22,7 @@ A reusable workflow that posts Slack notifications for workflow run status chang
   - `on-change` (default): Only notify when the state changes (failure -> success, success -> failure).
   - `all`: Send a notification on every run (success or failure).
   - `all-failures`: Send a notification on every failure, and on recovery.
+- `current_result`: Optional current workflow result (e.g., `success`, `failure`). If omitted, it will automatically query the GitHub API to scan all jobs in the run and determine the status.
 - `slack_channel`: Target Slack channel (e.g., `#build-status` or ID). **Required**.
 
 ## Organisation Setup

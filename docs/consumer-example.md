@@ -1,10 +1,48 @@
 # Consumer Example
 
-Here is an example of how to use the RZR Status Notify reusable workflow in your own repositories.
+Here are examples of how to use the RZR Status Notify reusable workflow in your own repositories.
 
-## Using Slack Bot Token
+## Example 1: Automatic Result Detection (Recommended)
 
-This setup dynamically routes notifications to a specific Slack channel using a single organisation-wide Slack Bot Token.
+In this setup, `current_result` is omitted. The workflow automatically queries the GitHub API to scan the conclusions of all other jobs in the current run.
+
+```yaml
+name: Validation
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run build and tests
+        run: echo "Replace this with the actual build"
+
+  notify:
+    runs-on: ubuntu-slim
+    needs:
+      - build
+    if: always()
+    uses: YOUR_ORG/.github/.github/workflows/rzr-notify-status.yml@main
+    with:
+      channel_context: Validation run
+      slack_channel: "#team-a-builds" # Target channel
+      mention_on_failure: "<!subteam^REPLACE_WITH_SLACK_USER_GROUP_ID>"
+    secrets:
+      slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
+```
+
+## Example 2: Explicit Result Override
+
+If you want to override the result manually, you can pass `current_result` explicitly.
 
 ```yaml
 name: Validation
@@ -41,4 +79,4 @@ jobs:
       slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
 ```
 
-**Note**: The `notify` job must be a separate final job using `if: always()` so it runs after success or failure of the preceding jobs.
+**Note**: The `notify` job must have `needs:` pointing to the preceding jobs so it runs after they finish, and it must use `if: always()` so it runs even if preceding jobs fail.
