@@ -72,16 +72,23 @@ jobs:
               return;
             }
 
+            // Always fetch run jobs to analyze results
+            const jobsResponse = await github.rest.actions.listJobsForWorkflowRun({
+              owner,
+              repo,
+              run_id: context.runId,
+              per_page: 100
+            });
+            const jobs = jobsResponse.data.jobs || [];
+
+            const passedJobs = jobs.filter(j => j.conclusion === 'success').map(j => j.name);
+            const failedJobs = jobs.filter(j => j.conclusion === 'failure' || j.conclusion === 'timed_out').map(j => j.name);
+            const skippedJobs = jobs.filter(j => j.conclusion === 'skipped').map(j => j.name);
+            const cancelledJobs = jobs.filter(j => j.conclusion === 'cancelled').map(j => j.name);
+
             let currentResult = currentResultInput;
             if (!currentResult) {
-              const jobs = await github.rest.actions.listJobsForWorkflowRun({
-                owner,
-                repo,
-                run_id: context.runId,
-                per_page: 100
-              });
-              const anyFailure = jobs.data.jobs.some(j => j.conclusion === 'failure' || j.conclusion === 'timed_out');
-              currentResult = anyFailure ? 'failure' : 'success';
+              currentResult = failedJobs.length > 0 ? 'failure' : 'success';
             } else {
               const validResults = ['success', 'failure', 'cancelled', 'skipped'];
               if (!validResults.includes(currentResult)) {
@@ -112,25 +119,74 @@ jobs:
 
             let notificationType = 'none';
             let statusText = 'recovered';
+            let reasoning = '';
 
             if (currentResult === 'failure') {
-              if (reportMode === 'all' || reportMode === 'all-failures') {
+              if (reportMode === 'all') {
                 notificationType = 'failure';
-              } else if (reportMode === 'on-change' && previousConclusion !== 'failure') {
+                reasoning = `Current run failed. Mode is 'all', so notification is triggered.`;
+              } else if (reportMode === 'all-failures') {
                 notificationType = 'failure';
+                reasoning = `Current run failed. Mode is 'all-failures', so notification is triggered.`;
+              } else if (reportMode === 'on-change') {
+                if (previousConclusion !== 'failure') {
+                  notificationType = 'failure';
+                  reasoning = `Current run failed, while previous run conclusion was '${previousConclusion}' (state changed to failure). Notification is triggered.`;
+                } else {
+                  reasoning = `Current run failed, and previous run conclusion was also '${previousConclusion}'. Mode is 'on-change', suppressing duplicate failure notification.`;
+                }
               }
             } else if (currentResult === 'success') {
               if (reportMode === 'all') {
                 notificationType = 'recovery';
                 statusText = previousConclusion === 'failure' ? 'recovered' : 'succeeded';
-              } else if ((reportMode === 'on-change' || reportMode === 'all-failures') && previousConclusion === 'failure') {
-                notificationType = 'recovery';
+                reasoning = `Current run succeeded. Previous run conclusion was '${previousConclusion}'. Mode is 'all', so notification is triggered.`;
+              } else if (reportMode === 'on-change' || reportMode === 'all-failures') {
+                if (previousConclusion === 'failure') {
+                  notificationType = 'recovery';
+                  reasoning = `Current run succeeded, while previous run failed. Build has recovered. Notification is triggered.`;
+                } else {
+                  reasoning = `Current run succeeded and previous run conclusion was '${previousConclusion}'. State did not transition from failure. Notification is suppressed.`;
+                }
               }
             }
+
+            let meaning = '';
+            if (previousConclusion === 'failure') {
+              if (currentResult === 'success') {
+                meaning = 'Build recovered! The previous failure has been resolved.';
+              } else {
+                meaning = 'Build is still failing. Attention is required to fix the broken jobs.';
+              }
+            } else {
+              if (currentResult === 'failure') {
+                meaning = 'Build broke! A new failure was introduced. Please investigate.';
+              } else {
+                meaning = 'Build is healthy and continues to pass.';
+              }
+            }
+
+            let jobSummary = `Passed: ${passedJobs.length} | Failed: ${failedJobs.length} | Skipped: ${skippedJobs.length}`;
+            if (failedJobs.length > 0) {
+              jobSummary += ` (Failed: ${failedJobs.join(', ')})`;
+            }
+            if (skippedJobs.length > 0) {
+              jobSummary += ` (Skipped: ${skippedJobs.join(', ')})`;
+            }
+
+            core.info(`Notification Type: ${notificationType}`);
+            core.info(`Status Text: ${statusText}`);
+            core.info(`Previous Conclusion: ${previousConclusion}`);
+            core.info(`Reasoning: ${reasoning}`);
+            core.info(`Job Summary: ${jobSummary}`);
+            core.info(`Meaning: ${meaning}`);
 
             core.setOutput('notification_type', notificationType);
             core.setOutput('status_text', statusText);
             core.setOutput('previous_conclusion', previousConclusion);
+            core.setOutput('reasoning', reasoning);
+            core.setOutput('job_summary', jobSummary);
+            core.setOutput('meaning', meaning);
 
       - name: Send Slack failure notification
         if: steps.decision.outputs.notification_type == 'failure'
@@ -143,10 +199,15 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           WORKFLOW_NAME: ${{ github.workflow }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REASONING: ${{ steps.decision.outputs.reasoning }}
+          JOB_SUMMARY: ${{ steps.decision.outputs.job_summary }}
+          MEANING: ${{ steps.decision.outputs.meaning }}
+          PREVIOUS_CONCLUSION: ${{ steps.decision.outputs.previous_conclusion }}
         run: |
+          NL=$'\n'
           payload=$(jq -n \
             --arg channel "$SLACK_CHANNEL" \
-            --arg text "❌ ${CHANNEL_CONTEXT} failed\n${MENTION}\nRepository: ${REPOSITORY}\nWorkflow: ${WORKFLOW_NAME}\nRun: ${RUN_URL}" \
+            --arg text "❌ ${CHANNEL_CONTEXT} failed${NL}${MENTION}${NL}Repository: ${REPOSITORY}${NL}Workflow: ${WORKFLOW_NAME}${NL}Run: ${RUN_URL}${NL}Previous State: ${PREVIOUS_CONCLUSION}${NL}Job Summary: ${JOB_SUMMARY}${NL}Reasoning: ${REASONING}${NL}What this means: ${MEANING}" \
             '{channel: $channel, text: $text}')
           
           response=$(curl -sS -X POST \
@@ -172,10 +233,15 @@ jobs:
           WORKFLOW_NAME: ${{ github.workflow }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           STATUS_TEXT: ${{ steps.decision.outputs.status_text }}
+          REASONING: ${{ steps.decision.outputs.reasoning }}
+          JOB_SUMMARY: ${{ steps.decision.outputs.job_summary }}
+          MEANING: ${{ steps.decision.outputs.meaning }}
+          PREVIOUS_CONCLUSION: ${{ steps.decision.outputs.previous_conclusion }}
         run: |
+          NL=$'\n'
           payload=$(jq -n \
             --arg channel "$SLACK_CHANNEL" \
-            --arg text "✅ ${CHANNEL_CONTEXT} ${STATUS_TEXT}\nRepository: ${REPOSITORY}\nWorkflow: ${WORKFLOW_NAME}\nRun: ${RUN_URL}" \
+            --arg text "✅ ${CHANNEL_CONTEXT} ${STATUS_TEXT}${NL}Repository: ${REPOSITORY}${NL}Workflow: ${WORKFLOW_NAME}${NL}Run: ${RUN_URL}${NL}Previous State: ${PREVIOUS_CONCLUSION}${NL}Job Summary: ${JOB_SUMMARY}${NL}Reasoning: ${REASONING}${NL}What this means: ${MEANING}" \
             '{channel: $channel, text: $text}')
           
           response=$(curl -sS -X POST \
