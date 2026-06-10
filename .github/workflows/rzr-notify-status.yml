@@ -90,14 +90,24 @@ jobs:
               return;
             }
 
-            // Always fetch run jobs to analyze results
+            // Always fetch run jobs to analyze results, using filter 'all' to get previous attempts
             const jobsResponse = await github.rest.actions.listJobsForWorkflowRun({
               owner,
               repo,
               run_id: context.runId,
-              per_page: 100
+              per_page: 100,
+              filter: 'all'
             });
-            const jobs = jobsResponse.data.jobs || [];
+            
+            // Deduplicate by job name, keeping the latest attempt
+            const jobMap = new Map();
+            for (const j of (jobsResponse.data.jobs || [])) {
+              const existing = jobMap.get(j.name);
+              if (!existing || j.run_attempt > existing.run_attempt) {
+                jobMap.set(j.name, j);
+              }
+            }
+            const jobs = Array.from(jobMap.values());
 
             const passedJobs = jobs.filter(j => j.conclusion === 'success').map(j => j.name);
             const failedJobs = jobs.filter(j => j.conclusion === 'failure' || j.conclusion === 'timed_out').map(j => j.name);
