@@ -43,7 +43,7 @@ permissions:
 
 jobs:
   notify:
-    name: Slack Notification
+    name: Status update
     runs-on: ubuntu-latest
 
     steps:
@@ -230,17 +230,25 @@ jobs:
             // Generate detailed job summary report
             let reportLines = [];
             reportLines.push(`# Workflow Run Job Summary (Run ID: ${context.runId})`);
-            reportLines.push(`**Repository:** ${owner}/${repo}`);
+            reportLines.push(`**Repository:** [${owner}/${repo}](https://github.com/${owner}/${repo})`);
             reportLines.push(`**Triggered by:** ${context.actor}`);
             reportLines.push("");
 
             const jobsDetails = [];
             for (const job of jobs) {
+              if (job.name.includes('Slack Notification') || job.name === context.job) {
+                continue; // Skip the notification job itself
+              }
               const duration = formatDuration(job.started_at, job.completed_at);
               const status = (job.conclusion || job.status || 'unknown').toUpperCase();
               
-              reportLines.push(`### Job: ${job.name}`);
-              reportLines.push(`- **Status:** ${status}`);
+              let emoji = '⚪';
+              if (status === 'SUCCESS') emoji = '🟢';
+              else if (status === 'FAILURE' || status === 'TIMED_OUT') emoji = '🔴';
+              else if (status === 'IN_PROGRESS' || status === 'QUEUED') emoji = '🟡';
+              
+              reportLines.push(`## Job: [${job.name}](${job.html_url})`);
+              reportLines.push(`- **Status:** ${emoji} ${status}`);
               reportLines.push(`- **Duration:** ${duration}`);
               
               let errorInfo = '';
