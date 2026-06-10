@@ -1,9 +1,9 @@
 # Consumer Example
 
-Here is an example of how to use the Nightly Status Notify reusable workflow in your own repositories.
+Here is an example of how to use the RZR Status Notify reusable workflow in your own repositories.
 
 ```yaml
-name: Nightly Validation
+name: Validation
 
 on:
   schedule:
@@ -18,17 +18,17 @@ jobs:
 
       - name: Run build and tests
         run: |
-          echo "Replace this with the actual nightly build"
+          echo "Replace this with the actual build"
 
   notify:
     runs-on: ubuntu-slim
     needs:
       - build
     if: always()
-    uses: YOUR_ORG/.github/.github/workflows/nightly-status-notify.yml@main
+    uses: YOUR_ORG/.github/.github/workflows/rzr-notify-status.yml@main
     with:
       current_result: ${{ needs.build.result }}
-      channel_context: Nightly build
+      channel_context: Validation run
       mention_on_failure: "<!subteam^REPLACE_WITH_SLACK_USER_GROUP_ID>"
     secrets:
       slack_webhook_url: ${{ secrets.SLACK_BUILD_WEBHOOK }}

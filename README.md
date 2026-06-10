@@ -9,11 +9,11 @@ This repository contains organisation-wide default files, community health files
 - **Community Health Files**: Default issue templates, PR templates, and contributing guidelines which apply to all repositories unless overridden locally.
 
 ## Shared GitHub Actions
-### Nightly Status Notify
+### RZR Status Notify
 
-A reusable workflow that posts Slack notifications for nightly build status changes across private repositories. It notifies Slack when a scheduled nightly workflow fails, or when a previously failing nightly workflow recovers, avoiding repeated messages.
+A reusable workflow that posts Slack notifications for workflow run status changes across private repositories. It notifies Slack when a scheduled workflow fails, or when a previously failing workflow recovers, avoiding repeated messages.
 
-[action](./.github/workflows/nightly-status-notify.yml)
+[action](./.github/workflows/rzr-notify-status.yml)
 [example](./docs/consumer-example.md)
 
 ## Organisation Setup

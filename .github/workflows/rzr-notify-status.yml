@@ -1,4 +1,4 @@
-name: Nightly Status Notify
+name: RZR Status Notify
 
 on:
   workflow_call:
@@ -13,9 +13,9 @@ on:
         default: ""
         type: string
       channel_context:
-        description: "Optional human-readable context, for example Nightly builds"
+        description: "Optional human-readable context, for example Workflow run"
         required: false
-        default: "Nightly build"
+        default: "Workflow run"
         type: string
     secrets:
       slack_webhook_url:
