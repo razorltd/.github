@@ -193,25 +193,24 @@ jobs:
 
             // Generate detailed job summary report
             let reportLines = [];
-            reportLines.push("======================================================================");
-            reportLines.push(`WORKFLOW RUN JOB SUMMARY (Run ID: ${context.runId})`);
-            reportLines.push(`Repository: ${owner}/${repo}`);
-            reportLines.push(`Triggered by: ${context.actor}`);
-            reportLines.push("======================================================================\n");
+            reportLines.push(`# Workflow Run Job Summary (Run ID: ${context.runId})`);
+            reportLines.push(`**Repository:** ${owner}/${repo}`);
+            reportLines.push(`**Triggered by:** ${context.actor}`);
+            reportLines.push("");
 
             const jobsDetails = [];
             for (const job of jobs) {
               const duration = formatDuration(job.started_at, job.completed_at);
               const status = (job.conclusion || job.status || 'unknown').toUpperCase();
               
-              reportLines.push(`Job Name:  ${job.name}`);
-              reportLines.push(`Status:    ${status}`);
-              reportLines.push(`Duration:  ${duration}`);
+              reportLines.push(`### Job: ${job.name}`);
+              reportLines.push(`- **Status:** ${status}`);
+              reportLines.push(`- **Duration:** ${duration}`);
               
               let errorInfo = '';
               if (job.conclusion === 'failure' || job.conclusion === 'timed_out') {
                 const failedStep = job.steps?.find(s => s.conclusion === 'failure' || s.conclusion === 'timed_out');
-                errorInfo = failedStep ? `Failed at step: "${failedStep.name}"` : 'Failed (reason unknown)';
+                errorInfo = failedStep ? `Failed at step: \`${failedStep.name}\`` : 'Failed (reason unknown)';
                 
                 try {
                   const annotations = await github.rest.checks.listAnnotations({
@@ -220,17 +219,17 @@ jobs:
                     check_run_id: job.id
                   });
                   if (annotations.data && annotations.data.length > 0) {
-                    errorInfo += "\nAnnotations:";
+                    errorInfo += "\n\n**Annotations:**\n";
                     for (const ann of annotations.data) {
-                      errorInfo += `\n  - [${ann.annotation_level}] ${ann.path || 'unknown'}:${ann.start_line || 0} - ${ann.message}`;
+                      errorInfo += `- [${ann.annotation_level}] \`${ann.path || 'unknown'}:${ann.start_line || 0}\` - ${ann.message}\n`;
                     }
                   }
                 } catch (err) {
                   // Ignore error fetching annotations
                 }
-                reportLines.push(`Error Info:\n${errorInfo}`);
+                reportLines.push(`\n**Error Info:**\n${errorInfo}`);
               }
-              reportLines.push("----------------------------------------------------------------------");
+              reportLines.push("");
               
               jobsDetails.push({
                 name: job.name,
@@ -243,7 +242,7 @@ jobs:
             }
 
             const fs = require('fs');
-            fs.writeFileSync('job_summary.txt', reportLines.join('\n'));
+            fs.writeFileSync('job_summary.md', reportLines.join('\n'));
 
             let failedJobsInline = '';
             if (failedJobs.length > 0) {
@@ -328,12 +327,12 @@ jobs:
           fi
 
           # Try uploading the job summary file to Slack V2 API
-          if [ -f "job_summary.txt" ]; then
+          if [ -f "job_summary.md" ]; then
             echo "Getting Slack upload URL..."
             res=$(curl -sS -X POST \
               -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-              -d "filename=job_summary.txt" \
-              -d "length=$(wc -c < job_summary.txt)" \
+              -d "filename=job_summary.md" \
+              -d "length=$(wc -c < job_summary.md)" \
               https://slack.com/api/files.getUploadURLExternal)
             
             if [ "$(echo "$res" | jq -r '.ok')" = "true" ]; then
@@ -341,7 +340,7 @@ jobs:
               file_id=$(echo "$res" | jq -r '.file_id')
               
               echo "Uploading file content..."
-              curl -sS -F "file=@job_summary.txt" "$upload_url"
+              curl -sS -F "file=@job_summary.md" "$upload_url"
               
               echo "Completing upload..."
               complete_res=$(curl -sS -X POST \
@@ -351,7 +350,7 @@ jobs:
                   --arg file_id "$file_id" \
                   --arg channel "$CHANNEL_ID" \
                   --arg comment "$comment" \
-                  '{files: [{id: $file_id, title: "job_summary.txt"}], channel_id: $channel, initial_comment: $comment}')" \
+                  '{files: [{id: $file_id, title: "job_summary.md"}], channel_id: $channel, initial_comment: $comment}')" \
                 https://slack.com/api/files.completeUploadExternal)
               
               echo "Slack response: $complete_res"
@@ -425,12 +424,12 @@ jobs:
           fi
 
           # Try uploading the job summary file to Slack V2 API
-          if [ -f "job_summary.txt" ]; then
+          if [ -f "job_summary.md" ]; then
             echo "Getting Slack upload URL..."
             res=$(curl -sS -X POST \
               -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-              -d "filename=job_summary.txt" \
-              -d "length=$(wc -c < job_summary.txt)" \
+              -d "filename=job_summary.md" \
+              -d "length=$(wc -c < job_summary.md)" \
               https://slack.com/api/files.getUploadURLExternal)
             
             if [ "$(echo "$res" | jq -r '.ok')" = "true" ]; then
@@ -438,7 +437,7 @@ jobs:
               file_id=$(echo "$res" | jq -r '.file_id')
               
               echo "Uploading file content..."
-              curl -sS -F "file=@job_summary.txt" "$upload_url"
+              curl -sS -F "file=@job_summary.md" "$upload_url"
               
               echo "Completing upload..."
               complete_res=$(curl -sS -X POST \
@@ -448,7 +447,7 @@ jobs:
                   --arg file_id "$file_id" \
                   --arg channel "$CHANNEL_ID" \
                   --arg comment "$comment" \
-                  '{files: [{id: $file_id, title: "job_summary.txt"}], channel_id: $channel, initial_comment: $comment}')" \
+                  '{files: [{id: $file_id, title: "job_summary.md"}], channel_id: $channel, initial_comment: $comment}')" \
                 https://slack.com/api/files.completeUploadExternal)
               
               echo "Slack response: $complete_res"
@@ -546,38 +545,55 @@ jobs:
                   fs.mkdirSync(productDir, { recursive: true });
                 }
                 
-                // 1. Update current.status
-                const currentStatusPath = path.join(productDir, 'current.status');
-                let currentStatus = {};
-                if (fs.existsSync(currentStatusPath)) {
+                // 1. Update {{NAME}}.status
+                const statusFilePath = path.join(productDir, `${workflowSlug}.status`);
+                let existingStatus = {};
+                if (fs.existsSync(statusFilePath)) {
                   try {
-                    currentStatus = JSON.parse(fs.readFileSync(currentStatusPath, 'utf8'));
+                    existingStatus = JSON.parse(fs.readFileSync(statusFilePath, 'utf8'));
                   } catch (e) {
-                    core.warning(`Failed to parse existing current.status: ${e.message}. Starting fresh.`);
+                    core.warning(`Failed to parse existing ${workflowSlug}.status: ${e.message}. Starting fresh.`);
                   }
                 }
                 
-                // Check if there is an existing run number for this named workflow
-                const existing = currentStatus[name];
-                if (existing && existing.run_number && existing.run_number > runNumber) {
-                  core.info(`Existing run_number (${existing.run_number}) is newer than current run_number (${runNumber}). Skipping current.status update.`);
+                if (existingStatus.runNumber && existingStatus.runNumber > runNumber) {
+                  core.info(`Existing runNumber (${existingStatus.runNumber}) is newer than current runNumber (${runNumber}). Skipping update.`);
+                  success = true;
+                  break;
+                }
+
+                const newStatus = {
+                  name: name,
+                  runId: runDetails.run_id,
+                  runNumber: runNumber,
+                  timestamp: runDetails.started_at,
+                  repo: runDetails.repo,
+                  URL: runDetails.run_url
+                };
+                fs.writeFileSync(statusFilePath, JSON.stringify(newStatus, null, 2));
+                core.info(`Updated ${workflowSlug}.status`);
+                
+                // 2. Write {{NAME}}.report
+                const reportFilePath = path.join(productDir, `${workflowSlug}.report`);
+                
+                let reportContent = `# ${name}\n\n`;
+                reportContent += `**Product:** ${product}\n`;
+                reportContent += `**Repository:** ${runDetails.repo}\n`;
+                reportContent += `**Workflow:** ${runDetails.workflow}\n`;
+                reportContent += `**Run:** [${runDetails.run_id}](${runDetails.run_url})\n`;
+                reportContent += `**Status:** ${runDetails.status}\n\n`;
+                
+                const jobSummaryPath = path.join(process.cwd(), 'job_summary.md');
+                if (fs.existsSync(jobSummaryPath)) {
+                  reportContent += fs.readFileSync(jobSummaryPath, 'utf8');
+                } else if (fs.existsSync('job_summary.md')) {
+                  reportContent += fs.readFileSync('job_summary.md', 'utf8');
                 } else {
-                  currentStatus[name] = {
-                    status: runDetails.status,
-                    run_id: runDetails.run_id,
-                    run_number: runNumber,
-                    updated_at: new Date().toISOString(),
-                    repo: runDetails.repo,
-                    run_url: runDetails.run_url
-                  };
-                  fs.writeFileSync(currentStatusPath, JSON.stringify(currentStatus, null, 2));
-                  core.info(`Updated current.status for '${name}' to status '${runDetails.status}'`);
+                  reportContent += "```json\n" + JSON.stringify(runDetails, null, 2) + "\n```\n";
                 }
                 
-                // 2. Write individual run details file
-                const runFilePath = path.join(productDir, `${workflowSlug}-${runNumber}.json`);
-                fs.writeFileSync(runFilePath, JSON.stringify(runDetails, null, 2));
-                core.info(`Wrote individual run details to ${workflowSlug}-${runNumber}.json`);
+                fs.writeFileSync(reportFilePath, reportContent);
+                core.info(`Wrote report to ${workflowSlug}.report`);
                 
                 // Commit and push
                 const options = { cwd: cloneDir };
