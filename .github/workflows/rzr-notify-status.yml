@@ -160,9 +160,9 @@ jobs:
               }
             } else {
               if (currentResult === 'failure') {
-                meaning = 'Build broke! A new failure was introduced. Please investigate.';
+                meaning = 'One or more jobs failed, please investigate.';
               } else {
-                meaning = 'Build is healthy and continues to pass.';
+                meaning = 'Build is healthy and the jobs are passing.';
               }
             }
 
