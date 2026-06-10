@@ -271,7 +271,7 @@ jobs:
           PREVIOUS_CONCLUSION: ${{ steps.decision.outputs.previous_conclusion }}
         run: |
           NL=$'\n'
-          comment="❌ *${NAME} failed*${NL}> *Product:* ${PRODUCT}${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}${FAILED_JOBS_INLINE}> *What this means:* ${MEANING}"
+          comment="❌ *${NAME} failed*${NL}${NL}> *Product:* ${PRODUCT}${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}${FAILED_JOBS_INLINE}> *What this means:* ${MEANING}"
 
           # Look up channel ID if channel name is provided (starting with #)
           CHANNEL_ID="$SLACK_CHANNEL"
@@ -368,7 +368,7 @@ jobs:
           PREVIOUS_CONCLUSION: ${{ steps.decision.outputs.previous_conclusion }}
         run: |
           NL=$'\n'
-          comment="✅ *${NAME} ${STATUS_TEXT}*${NL}> *Product:* ${PRODUCT}${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}> *What this means:* ${MEANING}"
+          comment="✅ *${NAME} ${STATUS_TEXT}*${NL}${NL}> *Product:* ${PRODUCT}${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}> *What this means:* ${MEANING}"
 
           # Look up channel ID if channel name is provided (starting with #)
           CHANNEL_ID="$SLACK_CHANNEL"
