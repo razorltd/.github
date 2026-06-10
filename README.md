@@ -33,7 +33,7 @@ A reusable workflow that posts Slack notifications for workflow run status chang
 ## Organisation Setup
 ### Secrets
 
-- `slack_bot_token`: A Slack Bot User OAuth Token (`xoxb-...`) with `chat.postMessage` and `files:write` scopes. Recommended to store this as an organisation secret named `SLACK_BOT_TOKEN`. **Required**.
+- `slack_bot_token`: A Slack Bot User OAuth Token (`xoxb-...`) with `chat.postMessage`, `files:write`, and optionally `channels:read`/`groups:read` scopes. Recommended to store this as an organisation secret named `SLACK_BOT_TOKEN`. **Required**.
 
 ### Required Manual Setup
 
