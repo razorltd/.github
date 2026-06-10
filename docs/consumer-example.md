@@ -34,7 +34,8 @@ jobs:
     if: always()
     uses: YOUR_ORG/.github/.github/workflows/rzr-notify-status.yml@main
     with:
-      channel_context: Validation run
+      name: Validation run
+      product: MyProduct
       slack_channel: "#team-a-builds" # Target channel
     secrets:
       slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -73,7 +74,8 @@ jobs:
     uses: YOUR_ORG/.github/.github/workflows/rzr-notify-status.yml@main
     with:
       current_result: ${{ needs.build.result }}
-      channel_context: Validation run
+      name: Validation run
+      product: MyProduct
       slack_channel: "#team-a-builds" # Target channel
     secrets:
       slack_bot_token: ${{ secrets.SLACK_BOT_TOKEN }}

@@ -8,10 +8,13 @@ on:
         required: false
         default: ""
         type: string
-      channel_context:
-        description: "Optional human-readable context, for example Workflow run"
-        required: false
-        default: "Workflow run"
+      name:
+        description: "A human-readable name/context, for example Validation run"
+        required: true
+        type: string
+      product:
+        description: "The name of the product (e.g. DataQI)"
+        required: true
         type: string
       report-mode:
         description: "Notification mode: on-change (default), all, all-failures"
@@ -257,7 +260,8 @@ jobs:
         env:
           SLACK_BOT_TOKEN: ${{ secrets.slack_bot_token }}
           SLACK_CHANNEL: ${{ inputs.slack_channel }}
-          CHANNEL_CONTEXT: ${{ inputs.channel_context }}
+          NAME: ${{ inputs.name }}
+          PRODUCT: ${{ inputs.product }}
           REPOSITORY: ${{ github.repository }}
           WORKFLOW_NAME: ${{ github.workflow }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -267,7 +271,7 @@ jobs:
           PREVIOUS_CONCLUSION: ${{ steps.decision.outputs.previous_conclusion }}
         run: |
           NL=$'\n'
-          comment="❌ *${CHANNEL_CONTEXT} failed*${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}${FAILED_JOBS_INLINE}> *What this means:* ${MEANING}"
+          comment="❌ *${NAME} failed*${NL}> *Product:* ${PRODUCT}${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}${FAILED_JOBS_INLINE}> *What this means:* ${MEANING}"
 
           # Try uploading the job summary file to Slack V2 API
           if [ -f "job_summary.txt" ]; then
@@ -332,7 +336,8 @@ jobs:
         env:
           SLACK_BOT_TOKEN: ${{ secrets.slack_bot_token }}
           SLACK_CHANNEL: ${{ inputs.slack_channel }}
-          CHANNEL_CONTEXT: ${{ inputs.channel_context }}
+          NAME: ${{ inputs.name }}
+          PRODUCT: ${{ inputs.product }}
           REPOSITORY: ${{ github.repository }}
           WORKFLOW_NAME: ${{ github.workflow }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -342,7 +347,7 @@ jobs:
           PREVIOUS_CONCLUSION: ${{ steps.decision.outputs.previous_conclusion }}
         run: |
           NL=$'\n'
-          comment="✅ *${CHANNEL_CONTEXT} ${STATUS_TEXT}*${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}> *What this means:* ${MEANING}"
+          comment="✅ *${NAME} ${STATUS_TEXT}*${NL}> *Product:* ${PRODUCT}${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}> *What this means:* ${MEANING}"
 
           # Try uploading the job summary file to Slack V2 API
           if [ -f "job_summary.txt" ]; then
