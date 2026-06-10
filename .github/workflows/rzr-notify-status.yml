@@ -1,0 +1,137 @@
+name: RZR Status Notify
+
+on:
+  workflow_call:
+    inputs:
+      current_result:
+        description: "Current workflow result from the caller, usually needs.<job>.result"
+        required: true
+        type: string
+      mention_on_failure:
+        description: "Optional Slack mention, for example <!subteam^ID> or @here"
+        required: false
+        default: ""
+        type: string
+      channel_context:
+        description: "Optional human-readable context, for example Workflow run"
+        required: false
+        default: "Workflow run"
+        type: string
+      report-mode:
+        description: "Notification mode: on-change (default), all, all-failures"
+        required: false
+        default: "on-change"
+        type: string
+    secrets:
+      slack_webhook_url:
+        required: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Determine whether Slack notification is required
+        id: decision
+        uses: actions/github-script@v7
+        env:
+          CURRENT_RESULT: ${{ inputs.current_result }}
+          REPORT_MODE: ${{ inputs.report-mode }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const currentResult = process.env.CURRENT_RESULT;
+            const reportMode = process.env.REPORT_MODE;
+
+            const validModes = ['on-change', 'all', 'all-failures'];
+            if (!validModes.includes(reportMode)) {
+              core.setFailed(`Invalid report-mode: ${reportMode}. Must be one of: ${validModes.join(', ')}`);
+              return;
+            }
+
+            const currentRun = await github.rest.actions.getWorkflowRun({
+              owner,
+              repo,
+              run_id: context.runId
+            });
+            const workflowId = currentRun.data.workflow_id;
+
+            const runs = await github.rest.actions.listWorkflowRuns({
+              owner,
+              repo,
+              workflow_id: workflowId,
+              status: 'completed',
+              per_page: 10
+            });
+
+            const currentRunId = context.runId;
+
+            const previousRun = runs.data.workflow_runs.find(r => r.id !== currentRunId);
+            const previousConclusion = previousRun?.conclusion || 'unknown';
+
+            let notificationType = 'none';
+            let statusText = 'recovered';
+
+            if (currentResult === 'failure') {
+              if (reportMode === 'all' || reportMode === 'all-failures') {
+                notificationType = 'failure';
+              } else if (reportMode === 'on-change' && previousConclusion !== 'failure') {
+                notificationType = 'failure';
+              }
+            } else if (currentResult === 'success') {
+              if (reportMode === 'all') {
+                notificationType = 'recovery';
+                statusText = previousConclusion === 'failure' ? 'recovered' : 'succeeded';
+              } else if ((reportMode === 'on-change' || reportMode === 'all-failures') && previousConclusion === 'failure') {
+                notificationType = 'recovery';
+              }
+            }
+
+            core.setOutput('notification_type', notificationType);
+            core.setOutput('status_text', statusText);
+            core.setOutput('previous_conclusion', previousConclusion);
+
+      - name: Send Slack failure notification
+        if: steps.decision.outputs.notification_type == 'failure'
+        shell: bash
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.slack_webhook_url }}
+          MENTION: ${{ inputs.mention_on_failure }}
+          CHANNEL_CONTEXT: ${{ inputs.channel_context }}
+          REPOSITORY: ${{ github.repository }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          payload=$(jq -n \
+            --arg text "❌ ${CHANNEL_CONTEXT} failed\n${MENTION}\nRepository: ${REPOSITORY}\nWorkflow: ${WORKFLOW_NAME}\nRun: ${RUN_URL}" \
+            '{text: $text}')
+
+          curl -sS -X POST \
+            -H 'Content-type: application/json' \
+            --data "$payload" \
+            "$SLACK_WEBHOOK_URL"
+
+      - name: Send Slack recovery notification
+        if: steps.decision.outputs.notification_type == 'recovery'
+        shell: bash
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.slack_webhook_url }}
+          CHANNEL_CONTEXT: ${{ inputs.channel_context }}
+          REPOSITORY: ${{ github.repository }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          STATUS_TEXT: ${{ steps.decision.outputs.status_text }}
+        run: |
+          payload=$(jq -n \
+            --arg text "✅ ${CHANNEL_CONTEXT} ${STATUS_TEXT}\nRepository: ${REPOSITORY}\nWorkflow: ${WORKFLOW_NAME}\nRun: ${RUN_URL}" \
+            '{text: $text}')
+
+          curl -sS -X POST \
+            -H 'Content-type: application/json' \
+            --data "$payload" \
+            "$SLACK_WEBHOOK_URL"
