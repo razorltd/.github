@@ -28,6 +28,9 @@ on:
     secrets:
       slack_bot_token:
         required: true
+      status_token:
+        description: "GitHub PAT with write access to the .status repository"
+        required: true
 
 permissions:
   actions: read
@@ -48,6 +51,7 @@ jobs:
           REPORT_MODE: ${{ inputs.report-mode }}
           SLACK_BOT_TOKEN: ${{ secrets.slack_bot_token }}
           SLACK_CHANNEL: ${{ inputs.slack_channel }}
+          NAME: ${{ inputs.name }}
         with:
           script: |
             const owner = context.repo.owner;
@@ -191,6 +195,7 @@ jobs:
             reportLines.push(`Triggered by: ${context.actor}`);
             reportLines.push("======================================================================\n");
 
+            const jobsDetails = [];
             for (const job of jobs) {
               const duration = formatDuration(job.started_at, job.completed_at);
               const status = (job.conclusion || job.status || 'unknown').toUpperCase();
@@ -199,9 +204,10 @@ jobs:
               reportLines.push(`Status:    ${status}`);
               reportLines.push(`Duration:  ${duration}`);
               
+              let errorInfo = '';
               if (job.conclusion === 'failure' || job.conclusion === 'timed_out') {
                 const failedStep = job.steps?.find(s => s.conclusion === 'failure' || s.conclusion === 'timed_out');
-                let errorInfo = failedStep ? `Failed at step: "${failedStep.name}"` : 'Failed (reason unknown)';
+                errorInfo = failedStep ? `Failed at step: "${failedStep.name}"` : 'Failed (reason unknown)';
                 
                 try {
                   const annotations = await github.rest.checks.listAnnotations({
@@ -221,6 +227,15 @@ jobs:
                 reportLines.push(`Error Info:\n${errorInfo}`);
               }
               reportLines.push("----------------------------------------------------------------------");
+              
+              jobsDetails.push({
+                name: job.name,
+                status: status,
+                duration: duration,
+                error_info: errorInfo,
+                started_at: job.started_at,
+                completed_at: job.completed_at
+              });
             }
 
             const fs = require('fs');
@@ -253,6 +268,20 @@ jobs:
             core.setOutput('job_summary', jobSummary);
             core.setOutput('meaning', meaning);
             core.setOutput('failed_jobs_inline', failedJobsInline);
+
+            const runDetails = {
+              repo: `${owner}/${repo}`,
+              workflow: process.env.NAME || context.workflow,
+              run_id: context.runId,
+              run_number: context.runNumber,
+              run_url: `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`,
+              actor: context.actor,
+              status: currentResult,
+              started_at: currentRun.data.run_started_at || currentRun.data.created_at,
+              completed_at: new Date().toISOString(),
+              jobs: jobsDetails
+            };
+            core.setOutput('run_details_json', JSON.stringify(runDetails));
 
       - name: Send Slack failure notification
         if: steps.decision.outputs.notification_type == 'failure'
@@ -447,3 +476,131 @@ jobs:
             echo "Error: Slack API call failed!" >&2
             exit 1
           fi
+
+      - name: Store status in .status repository
+        if: always() && steps.decision.conclusion == 'success'
+        uses: actions/github-script@v8
+        env:
+          STATUS_TOKEN: ${{ secrets.status_token }}
+          PRODUCT: ${{ inputs.product }}
+          NAME: ${{ inputs.name }}
+          RUN_DETAILS_JSON: ${{ steps.decision.outputs.run_details_json }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const exec = require('@actions/exec');
+
+            const statusToken = process.env.STATUS_TOKEN;
+            const product = process.env.PRODUCT;
+            const name = process.env.NAME;
+            const runDetailsJsonStr = process.env.RUN_DETAILS_JSON;
+
+            if (!statusToken) {
+              core.info("No status_token provided, skipping storing status.");
+              return;
+            }
+
+            const runDetails = JSON.parse(runDetailsJsonStr);
+            const runNumber = runDetails.run_number;
+            const workflowSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+            const owner = context.repo.owner;
+            const repoUrl = `https://x-access-token:${statusToken}@github.com/${owner}/.status.git`;
+            const cloneDir = path.join(process.cwd(), 'status-repo');
+
+            // Configure git
+            await exec.exec('git', ['config', '--global', 'user.name', 'github-actions[bot]']);
+            await exec.exec('git', ['config', '--global', 'user.email', 'github-actions[bot]@users.noreply.github.com']);
+
+            // We will try up to 5 times to clone, modify, and push
+            const maxRetries = 5;
+            let success = false;
+
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+              try {
+                core.info(`Attempt ${attempt} to update .status repository...`);
+                
+                // Clean up cloneDir if it exists
+                if (fs.existsSync(cloneDir)) {
+                  fs.rmSync(cloneDir, { recursive: true, force: true });
+                }
+                
+                // Clone
+                await exec.exec('git', ['clone', '--depth', '1', repoUrl, cloneDir]);
+                
+                const productDir = path.join(cloneDir, product);
+                if (!fs.existsSync(productDir)) {
+                  fs.mkdirSync(productDir, { recursive: true });
+                }
+                
+                // 1. Update current.status
+                const currentStatusPath = path.join(productDir, 'current.status');
+                let currentStatus = {};
+                if (fs.existsSync(currentStatusPath)) {
+                  try {
+                    currentStatus = JSON.parse(fs.readFileSync(currentStatusPath, 'utf8'));
+                  } catch (e) {
+                    core.warning(`Failed to parse existing current.status: ${e.message}. Starting fresh.`);
+                  }
+                }
+                
+                // Check if there is an existing run number for this named workflow
+                const existing = currentStatus[name];
+                if (existing && existing.run_number && existing.run_number > runNumber) {
+                  core.info(`Existing run_number (${existing.run_number}) is newer than current run_number (${runNumber}). Skipping current.status update.`);
+                } else {
+                  currentStatus[name] = {
+                    status: runDetails.status,
+                    run_id: runDetails.run_id,
+                    run_number: runNumber,
+                    updated_at: new Date().toISOString(),
+                    repo: runDetails.repo,
+                    run_url: runDetails.run_url
+                  };
+                  fs.writeFileSync(currentStatusPath, JSON.stringify(currentStatus, null, 2));
+                  core.info(`Updated current.status for '${name}' to status '${runDetails.status}'`);
+                }
+                
+                // 2. Write individual run details file
+                const runFilePath = path.join(productDir, `${workflowSlug}-${runNumber}.json`);
+                fs.writeFileSync(runFilePath, JSON.stringify(runDetails, null, 2));
+                core.info(`Wrote individual run details to ${workflowSlug}-${runNumber}.json`);
+                
+                // Commit and push
+                const options = { cwd: cloneDir };
+                await exec.exec('git', ['add', '.'], options);
+                
+                // Check if there are any changes to commit
+                let statusOutput = '';
+                const statusOptions = {
+                  ...options,
+                  listeners: {
+                    stdout: (data) => { statusOutput += data.toString(); }
+                  }
+                };
+                await exec.exec('git', ['status', '--porcelain'], statusOptions);
+                
+                if (statusOutput.trim() === '') {
+                  core.info("No changes to commit. .status repo is already up to date.");
+                  success = true;
+                  break;
+                }
+                
+                await exec.exec('git', ['commit', '-m', `Update status for ${product}/${name} (Run #${runNumber})`], options);
+                await exec.exec('git', ['push'], options);
+                
+                core.info("Successfully pushed changes to .status repository!");
+                success = true;
+                break;
+              } catch (err) {
+                core.warning(`Attempt ${attempt} failed: ${err.message}`);
+                if (attempt < maxRetries) {
+                  const delay = Math.floor(Math.random() * 3000) + 1000; // 1-4 seconds delay
+                  core.info(`Waiting ${delay}ms before retrying...`);
+                  await new Promise(resolve => setTimeout(resolve, delay));
+                } else {
+                  core.setFailed(`Failed to update .status repository after ${maxRetries} attempts.`);
+                }
+              }
+            }
