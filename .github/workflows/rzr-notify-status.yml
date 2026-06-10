@@ -42,7 +42,7 @@ jobs:
     steps:
       - name: Determine whether Slack notification is required
         id: decision
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           CURRENT_RESULT: ${{ inputs.current_result }}
           REPORT_MODE: ${{ inputs.report-mode }}
