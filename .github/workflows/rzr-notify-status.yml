@@ -279,7 +279,7 @@ jobs:
             CLEAN_NAME="${CHANNEL_ID#\#}"
             echo "Looking up ID for channel $CHANNEL_ID..."
             list_res=$(curl -sS -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-              "https://slack.com/api/conversations.list?types=public_channel,private_channel&exclude_members=true&limit=1000")
+              "https://slack.com/api/users.conversations?types=public_channel,private_channel&exclude_members=true&limit=1000")
             
             if [ "$(echo "$list_res" | jq -r '.ok')" = "true" ]; then
               matched_id=$(echo "$list_res" | jq -r --arg name "$CLEAN_NAME" '.channels[] | select(.name == $name) | .id')
@@ -290,7 +290,7 @@ jobs:
                 echo "Warning: could not find channel with name $CLEAN_NAME in Slack list. Using original value."
               fi
             else
-              echo "Warning: conversations.list failed: $list_res"
+              echo "Warning: users.conversations failed: $list_res"
             fi
           fi
 
@@ -376,7 +376,7 @@ jobs:
             CLEAN_NAME="${CHANNEL_ID#\#}"
             echo "Looking up ID for channel $CHANNEL_ID..."
             list_res=$(curl -sS -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-              "https://slack.com/api/conversations.list?types=public_channel,private_channel&exclude_members=true&limit=1000")
+              "https://slack.com/api/users.conversations?types=public_channel,private_channel&exclude_members=true&limit=1000")
             
             if [ "$(echo "$list_res" | jq -r '.ok')" = "true" ]; then
               matched_id=$(echo "$list_res" | jq -r --arg name "$CLEAN_NAME" '.channels[] | select(.name == $name) | .id')
@@ -387,7 +387,7 @@ jobs:
                 echo "Warning: could not find channel with name $CLEAN_NAME in Slack list. Using original value."
               fi
             else
-              echo "Warning: conversations.list failed: $list_res"
+              echo "Warning: users.conversations failed: $list_res"
             fi
           fi
 
