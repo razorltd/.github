@@ -25,8 +25,8 @@ on:
         description: "Slack channel to post to (e.g., #build-status)"
         required: true
         type: string
-      status_app_id:
-        description: "GitHub App ID"
+      status_client_id:
+        description: "GitHub App Client ID"
         required: true
         type: string
     secrets:
@@ -51,7 +51,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ inputs.status_app_id }}
+          client-id: ${{ inputs.status_client_id }}
           private-key: ${{ secrets.status_app_private_key }}
           repositories: ".status"
 
