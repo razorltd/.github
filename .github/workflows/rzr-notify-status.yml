@@ -23,7 +23,8 @@ on:
         type: string
       slack_channel:
         description: "Slack channel to post to (e.g., #build-status)"
-        required: true
+        required: false
+        default: ""
         type: string
       status_client_id:
         description: "GitHub App Client ID"
@@ -31,7 +32,8 @@ on:
         type: string
     secrets:
       slack_bot_token:
-        required: true
+        description: "Slack bot token (required when slack_channel is provided)"
+        required: false
       status_app_private_key:
         description: "GitHub App Private Key (.pem file contents)"
         required: true
@@ -55,7 +57,7 @@ jobs:
           private-key: ${{ secrets.status_app_private_key }}
           repositories: ".status"
 
-      - name: Determine whether Slack notification is required
+      - name: Process status event
         id: decision
         uses: actions/github-script@v9
         env:
@@ -75,13 +77,12 @@ jobs:
             const botToken = process.env.SLACK_BOT_TOKEN;
             const channel = process.env.SLACK_CHANNEL;
 
-            if (!botToken) {
-              core.setFailed("Secret 'slack_bot_token' is required.");
+            const hasSlack = !!(botToken && channel);
+            if (channel && !botToken) {
+              core.setFailed("Slack bot token is required when 'slack_channel' is provided.");
               return;
-            }
-            if (!channel) {
-              core.setFailed("Input 'slack_channel' is required.");
-              return;
+            } else if (!hasSlack && botToken) {
+              core.info("Slack notifications will be skipped. To enable them, provide 'slack_channel'.");
             }
 
             const validModes = ['on-change', 'all', 'all-failures'];
@@ -193,6 +194,10 @@ jobs:
                   reasoning = `Current run succeeded and previous run conclusion was '${previousConclusion}'. State did not transition from failure. Notification is suppressed.`;
                 }
               }
+            }
+
+            if (!hasSlack) {
+              notificationType = 'none';
             }
 
             let meaning = '';
@@ -330,7 +335,7 @@ jobs:
             };
             core.setOutput('run_details_json', JSON.stringify(runDetails));
 
-      - name: Send Slack failure notification
+      - name: Send failure notification
         if: steps.decision.outputs.notification_type == 'failure'
         shell: bash
         env:
@@ -427,7 +432,7 @@ jobs:
             exit 1
           fi
 
-      - name: Send Slack recovery notification
+      - name: Send success notification
         if: steps.decision.outputs.notification_type == 'recovery'
         shell: bash
         env:
@@ -524,7 +529,7 @@ jobs:
             exit 1
           fi
 
-      - name: Store status in .status repository
+      - name: Persist status
         if: always() && steps.decision.conclusion == 'success'
         uses: actions/github-script@v9
         env:
