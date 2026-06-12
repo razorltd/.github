@@ -23,6 +23,7 @@ A reusable workflow that posts Slack notifications for workflow run status chang
   - `all`: Send a notification on every run (success or failure).
   - `all-failures`: Send a notification on every failure, and on recovery.
 - `current_result`: Optional current workflow result (e.g., `success`, `failure`). If omitted, it will automatically query the GitHub API to scan all jobs in the run and determine the status.
+- `artifacts`: Optional multi-line list of artifacts to link in the status UI. Format: `[Name](https://url)` (e.g. `[Playwright Report](https://example.com/report/index.html)`).
 
 ### Required Inputs
 

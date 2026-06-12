@@ -26,6 +26,11 @@ on:
         required: false
         default: ""
         type: string
+      artifacts:
+        description: "Optional multi-line list of artifacts to link. Format: `[Name](https://url)`"
+        required: false
+        default: ""
+        type: string
       status_client_id:
         description: "GitHub App Client ID"
         required: true
@@ -67,6 +72,7 @@ jobs:
           SLACK_CHANNEL: ${{ inputs.slack_channel }}
           NAME: ${{ inputs.name }}
           PRODUCT: ${{ inputs.product }}
+          ARTIFACTS: ${{ inputs.artifacts }}
           STATUS_TOKEN: ${{ steps.app-token.outputs.token }}
         with:
           script: |
@@ -232,12 +238,33 @@ jobs:
               return `${secs}s`;
             }
 
+            const artifactsInput = process.env.ARTIFACTS;
+            const parsedArtifacts = [];
+            if (artifactsInput) {
+              artifactsInput.split('\n').forEach(line => {
+                const trimmed = line.trim();
+                if (!trimmed) return;
+                const match = trimmed.match(/\[(.*?)\]\((.*?)\)/);
+                if (match && match[1] && match[2]) {
+                  parsedArtifacts.push({ name: match[1].trim(), url: match[2].trim() });
+                }
+              });
+            }
+
             // Generate detailed job summary report
             let reportLines = [];
             reportLines.push(`# Workflow Run Job Summary (Run ID: ${context.runId})`);
             reportLines.push(`**Repository:** [${owner}/${repo}](https://github.com/${owner}/${repo})`);
             reportLines.push(`**Triggered by:** ${context.actor}`);
             reportLines.push("");
+
+            if (parsedArtifacts.length > 0) {
+              reportLines.push("## Attached Artifacts");
+              parsedArtifacts.forEach(art => {
+                reportLines.push(`- [${art.name}](${art.url})`);
+              });
+              reportLines.push("");
+            }
 
             const jobsDetails = [];
             for (const job of jobs) {
@@ -321,6 +348,8 @@ jobs:
             core.setOutput('meaning', meaning);
             core.setOutput('failed_jobs_inline', failedJobsInline);
 
+
+
             const runDetails = {
               repo: `${owner}/${repo}`,
               workflow: process.env.NAME || context.workflow,
@@ -331,7 +360,8 @@ jobs:
               status: currentResult,
               started_at: currentRun.data.run_started_at || currentRun.data.created_at,
               completed_at: new Date().toISOString(),
-              jobs: jobsDetails
+              jobs: jobsDetails,
+              artifacts: parsedArtifacts
             };
             core.setOutput('run_details_json', JSON.stringify(runDetails));
 
@@ -610,7 +640,8 @@ jobs:
                   runNumber: runNumber,
                   timestamp: runDetails.started_at,
                   repo: runDetails.repo,
-                  URL: runDetails.run_url
+                  URL: runDetails.run_url,
+                  artifacts: runDetails.artifacts || []
                 };
                 fs.writeFileSync(statusFilePath, JSON.stringify(newStatus, null, 2));
                 core.info(`Updated ${workflowSlug}.status`);
