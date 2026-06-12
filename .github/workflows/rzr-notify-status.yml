@@ -347,6 +347,8 @@ jobs:
             core.setOutput('job_summary', jobSummary);
             core.setOutput('meaning', meaning);
             core.setOutput('failed_jobs_inline', failedJobsInline);
+            const dashboardUrl = `https://builds.status.razor.co.uk/${encodeURIComponent(process.env.PRODUCT)}/history/${workflowSlug}?runId=${context.runId}`;
+            core.setOutput('dashboard_url', dashboardUrl);
 
 
 
@@ -380,9 +382,10 @@ jobs:
           FAILED_JOBS_INLINE: ${{ steps.decision.outputs.failed_jobs_inline }}
           MEANING: ${{ steps.decision.outputs.meaning }}
           PREVIOUS_CONCLUSION: ${{ steps.decision.outputs.previous_conclusion }}
+          DASHBOARD_URL: ${{ steps.decision.outputs.dashboard_url }}
         run: |
           NL=$'\n'
-          comment="❌ *${NAME} failed*${NL}${NL}> *Product:* ${PRODUCT}${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}${FAILED_JOBS_INLINE}> *What this means:* ${MEANING}"
+          comment="❌ *${NAME} failed*${NL}${NL}> *Product:* ${PRODUCT}${NL}> *Dashboard:* <${DASHBOARD_URL}|View on Razor Status>${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}${FAILED_JOBS_INLINE}> *What this means:* ${MEANING}"
 
           # Look up channel ID if channel name is provided (starting with #)
           CHANNEL_ID="$SLACK_CHANNEL"
@@ -477,9 +480,10 @@ jobs:
           STATUS_TEXT: ${{ steps.decision.outputs.status_text }}
           MEANING: ${{ steps.decision.outputs.meaning }}
           PREVIOUS_CONCLUSION: ${{ steps.decision.outputs.previous_conclusion }}
+          DASHBOARD_URL: ${{ steps.decision.outputs.dashboard_url }}
         run: |
           NL=$'\n'
-          comment="✅ *${NAME} ${STATUS_TEXT}*${NL}${NL}> *Product:* ${PRODUCT}${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}> *What this means:* ${MEANING}"
+          comment="✅ *${NAME} ${STATUS_TEXT}*${NL}${NL}> *Product:* ${PRODUCT}${NL}> *Dashboard:* <${DASHBOARD_URL}|View on Razor Status>${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}> *What this means:* ${MEANING}"
 
           # Look up channel ID if channel name is provided (starting with #)
           CHANNEL_ID="$SLACK_CHANNEL"
