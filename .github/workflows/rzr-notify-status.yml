@@ -397,221 +397,40 @@ jobs:
             };
             core.setOutput('run_details_json', JSON.stringify(runDetails));
 
-      - name: Send failure notification
-        if: steps.decision.outputs.notification_type == 'failure'
+      - name: Send Slack notification
+        if: steps.decision.outputs.notification_type != 'none'
         shell: bash
         env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_bot_token }}
-          SLACK_CHANNEL: ${{ inputs.slack_channel }}
-          NAME: ${{ inputs.name }}
-          PRODUCT: ${{ inputs.product }}
-          REPOSITORY: ${{ github.repository }}
-          WORKFLOW_NAME: ${{ github.workflow }}
-          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          RUN_ID: ${{ github.run_id }}
-          FAILED_JOBS_INLINE: ${{ steps.decision.outputs.failed_jobs_inline }}
-          MEANING: ${{ steps.decision.outputs.meaning }}
-          PREVIOUS_CONCLUSION: ${{ steps.decision.outputs.previous_conclusion }}
-          DASHBOARD_URL: ${{ steps.decision.outputs.dashboard_url }}
-        run: |
-          NL=$'\n'
-          comment="❌ *${NAME} failed*${NL}${NL}> *Product:* ${PRODUCT}${NL}> *Dashboard:* <${DASHBOARD_URL}|View on Razor Status>${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}${FAILED_JOBS_INLINE}> *What this means:* ${MEANING}"
-
-          # Look up channel ID if channel name is provided (starting with #)
-          CHANNEL_ID="$SLACK_CHANNEL"
-          if [[ "$CHANNEL_ID" == "#"* ]]; then
-            CLEAN_NAME="${CHANNEL_ID#\#}"
-            echo "Looking up ID for channel $CHANNEL_ID..."
-            list_res=$(curl -sS -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-              "https://slack.com/api/users.conversations?types=public_channel,private_channel&exclude_members=true&limit=1000")
-            
-            if [ "$(echo "$list_res" | jq -r '.ok')" = "true" ]; then
-              matched_id=$(echo "$list_res" | jq -r --arg name "$CLEAN_NAME" '.channels[] | select(.name == $name) | .id')
-              if [ -n "$matched_id" ] && [ "$matched_id" != "null" ]; then
-                CHANNEL_ID="$matched_id"
-                echo "Found matched Channel ID: $CHANNEL_ID"
-              else
-                echo "Warning: could not find channel with name $CLEAN_NAME in Slack list. Using original value."
-              fi
-            else
-              echo "Warning: users.conversations failed: $list_res"
-            fi
-          fi
-
-          # Try uploading the job summary file to Slack V2 API
-          if [ -f "job_summary.md" ]; then
-            echo "Getting Slack upload URL..."
-            res=$(curl -sS -X POST \
-              -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-              -d "filename=job_summary.md" \
-              -d "length=$(wc -c < job_summary.md)" \
-              https://slack.com/api/files.getUploadURLExternal)
-            
-            if [ "$(echo "$res" | jq -r '.ok')" = "true" ]; then
-              upload_url=$(echo "$res" | jq -r '.upload_url')
-              file_id=$(echo "$res" | jq -r '.file_id')
-              
-              echo "Uploading file content..."
-              curl -sS -F "file=@job_summary.md" "$upload_url"
-              
-              echo "Completing upload..."
-              complete_res=$(curl -sS -X POST \
-                -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-                -H "Content-type: application/json; charset=utf-8" \
-                -d "$(jq -n \
-                  --arg file_id "$file_id" \
-                  --arg channel "$CHANNEL_ID" \
-                  --arg comment "$comment" \
-                  '{files: [{id: $file_id, title: "job_summary.md"}], channel_id: $channel, initial_comment: $comment}')" \
-                https://slack.com/api/files.completeUploadExternal)
-              
-              echo "Slack response: $complete_res"
-              if [ "$(echo "$complete_res" | jq -r '.ok')" = "true" ]; then
-                exit 0
-              else
-                echo "Warning: files.completeUploadExternal failed: $complete_res"
-              fi
-            else
-              echo "Warning: files.getUploadURLExternal failed: $res"
-            fi
-          fi
-
-          # Fallback: Send message only via chat.postMessage
-          echo "Falling back to text-only message..."
-          payload=$(jq -n \
-            --arg channel "$SLACK_CHANNEL" \
-            --arg text "$comment" \
-            '{channel: $channel, text: $text}')
-          
-          response=$(curl -sS -X POST \
-            -H 'Content-type: application/json; charset=utf-8' \
-            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-            --data "$payload" \
-            "https://slack.com/api/chat.postMessage")
-          
-          echo "Slack response: $response"
-          if [ "$(echo "$response" | jq -r '.ok')" != "true" ]; then
-            echo "Error: Slack API call failed!" >&2
-            exit 1
-          fi
-
-      - name: Send warning notification
-        if: steps.decision.outputs.notification_type == 'warning'
-        shell: bash
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_bot_token }}
-          SLACK_CHANNEL: ${{ inputs.slack_channel }}
-          NAME: ${{ inputs.name }}
-          PRODUCT: ${{ inputs.product }}
-          REPOSITORY: ${{ github.repository }}
-          WORKFLOW_NAME: ${{ github.workflow }}
-          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          RUN_ID: ${{ github.run_id }}
-          FAILED_JOBS_INLINE: ${{ steps.decision.outputs.failed_jobs_inline }}
-          MEANING: ${{ steps.decision.outputs.meaning }}
-          PREVIOUS_CONCLUSION: ${{ steps.decision.outputs.previous_conclusion }}
-          DASHBOARD_URL: ${{ steps.decision.outputs.dashboard_url }}
-        run: |
-          NL=$'\n'
-          comment="⚠️ *${NAME} warned*${NL}${NL}> *Product:* ${PRODUCT}${NL}> *Dashboard:* <${DASHBOARD_URL}|View on Razor Status>${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}${FAILED_JOBS_INLINE}> *What this means:* ${MEANING}"
-
-          # Look up channel ID if channel name is provided (starting with #)
-          CHANNEL_ID="$SLACK_CHANNEL"
-          if [[ "$CHANNEL_ID" == "#"* ]]; then
-            CLEAN_NAME="${CHANNEL_ID#\#}"
-            echo "Looking up ID for channel $CHANNEL_ID..."
-            list_res=$(curl -sS -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-              "https://slack.com/api/users.conversations?types=public_channel,private_channel&exclude_members=true&limit=1000")
-            
-            if [ "$(echo "$list_res" | jq -r '.ok')" = "true" ]; then
-              matched_id=$(echo "$list_res" | jq -r --arg name "$CLEAN_NAME" '.channels[] | select(.name == $name) | .id')
-              if [ -n "$matched_id" ] && [ "$matched_id" != "null" ]; then
-                CHANNEL_ID="$matched_id"
-                echo "Found matched Channel ID: $CHANNEL_ID"
-              else
-                echo "Warning: could not find channel with name $CLEAN_NAME in Slack list. Using original value."
-              fi
-            else
-              echo "Warning: users.conversations failed: $list_res"
-            fi
-          fi
-
-          # Try uploading the job summary file to Slack V2 API
-          if [ -f "job_summary.md" ]; then
-            echo "Getting Slack upload URL..."
-            res=$(curl -sS -X POST \
-              -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-              -d "filename=job_summary.md" \
-              -d "length=$(wc -c < job_summary.md)" \
-              https://slack.com/api/files.getUploadURLExternal)
-            
-            if [ "$(echo "$res" | jq -r '.ok')" = "true" ]; then
-              upload_url=$(echo "$res" | jq -r '.upload_url')
-              file_id=$(echo "$res" | jq -r '.file_id')
-              
-              echo "Uploading file content..."
-              curl -sS -F "file=@job_summary.md" "$upload_url"
-              
-              echo "Completing upload..."
-              complete_res=$(curl -sS -X POST \
-                -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-                -H "Content-type: application/json; charset=utf-8" \
-                -d "$(jq -n \
-                  --arg file_id "$file_id" \
-                  --arg channel "$CHANNEL_ID" \
-                  --arg comment "$comment" \
-                  '{files: [{id: $file_id, title: "job_summary.md"}], channel_id: $channel, initial_comment: $comment}')" \
-                https://slack.com/api/files.completeUploadExternal)
-              
-              echo "Slack response: $complete_res"
-              if [ "$(echo "$complete_res" | jq -r '.ok')" = "true" ]; then
-                exit 0
-              else
-                echo "Warning: files.completeUploadExternal failed: $complete_res"
-              fi
-            else
-              echo "Warning: files.getUploadURLExternal failed: $res"
-            fi
-          fi
-
-          # Fallback: Send message only via chat.postMessage
-          echo "Falling back to text-only message..."
-          payload=$(jq -n \
-            --arg channel "$SLACK_CHANNEL" \
-            --arg text "$comment" \
-            '{channel: $channel, text: $text}')
-          
-          response=$(curl -sS -X POST \
-            -H 'Content-type: application/json; charset=utf-8' \
-            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-            --data "$payload" \
-            "https://slack.com/api/chat.postMessage")
-          
-          echo "Slack response: $response"
-          if [ "$(echo "$response" | jq -r '.ok')" != "true" ]; then
-            echo "Error: Slack API call failed!" >&2
-            exit 1
-          fi
-
-      - name: Send success notification
-        if: steps.decision.outputs.notification_type == 'recovery'
-        shell: bash
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.slack_bot_token }}
-          SLACK_CHANNEL: ${{ inputs.slack_channel }}
-          NAME: ${{ inputs.name }}
-          PRODUCT: ${{ inputs.product }}
-          REPOSITORY: ${{ github.repository }}
-          WORKFLOW_NAME: ${{ github.workflow }}
-          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          RUN_ID: ${{ github.run_id }}
+          NOTIFICATION_TYPE: ${{ steps.decision.outputs.notification_type }}
           STATUS_TEXT: ${{ steps.decision.outputs.status_text }}
+          SLACK_BOT_TOKEN: ${{ secrets.slack_bot_token }}
+          SLACK_CHANNEL: ${{ inputs.slack_channel }}
+          NAME: ${{ inputs.name }}
+          PRODUCT: ${{ inputs.product }}
+          REPOSITORY: ${{ github.repository }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_ID: ${{ github.run_id }}
+          FAILED_JOBS_INLINE: ${{ steps.decision.outputs.failed_jobs_inline }}
           MEANING: ${{ steps.decision.outputs.meaning }}
           PREVIOUS_CONCLUSION: ${{ steps.decision.outputs.previous_conclusion }}
           DASHBOARD_URL: ${{ steps.decision.outputs.dashboard_url }}
         run: |
           NL=$'\n'
-          comment="✅ *${NAME} ${STATUS_TEXT}*${NL}${NL}> *Product:* ${PRODUCT}${NL}> *Dashboard:* <${DASHBOARD_URL}|View on Razor Status>${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}> *What this means:* ${MEANING}"
+          if [ "${NOTIFICATION_TYPE}" = "failure" ]; then
+            EMOJI="❌"
+            ACTION_TEXT="failed"
+            JOBS_INLINE="${FAILED_JOBS_INLINE}"
+          elif [ "${NOTIFICATION_TYPE}" = "warning" ]; then
+            EMOJI="⚠️"
+            ACTION_TEXT="warned"
+            JOBS_INLINE="${FAILED_JOBS_INLINE}"
+          else
+            EMOJI="✅"
+            ACTION_TEXT="${STATUS_TEXT}"
+            JOBS_INLINE=""
+          fi
+          comment="${EMOJI} *${NAME} ${ACTION_TEXT}*${NL}${NL}> *Product:* ${PRODUCT}${NL}> *Dashboard:* <${DASHBOARD_URL}|View on Razor Status>${NL}> *Repository:* ${REPOSITORY}${NL}> *Workflow:* ${WORKFLOW_NAME}${NL}> *Run:* <${RUN_URL}|${RUN_ID}>${NL}> *Previous State:* ${PREVIOUS_CONCLUSION}${NL}${JOBS_INLINE}> *What this means:* ${MEANING}"
 
           # Look up channel ID if channel name is provided (starting with #)
           CHANNEL_ID="$SLACK_CHANNEL"
