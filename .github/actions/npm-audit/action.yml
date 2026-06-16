@@ -42,6 +42,9 @@ outputs:
   lowVulnerabilities:
     description: 'List of low vulnerability packages (JSON array)'
     value: ${{ steps.parse-audit.outputs.lowVulnerabilities }}
+  vulnerabilitiesArtifacts:
+    description: 'A multi-line markdown link list of found vulnerabilities formatted for the status notifier.'
+    value: ${{ steps.parse-audit.outputs.vulnerabilitiesArtifacts }}
 
 runs:
   using: 'composite'
@@ -80,6 +83,9 @@ runs:
         MODERATE_LIST=$(echo "$AUDIT_OUTPUT" | jq -c '[.vulnerabilities[]? | select(.severity == "moderate") | .name] | unique // []')
         LOW_LIST=$(echo "$AUDIT_OUTPUT" | jq -c '[.vulnerabilities[]? | select(.severity == "low") | .name] | unique // []')
 
+        # Construct vulnerabilities artifacts string formatted as markdown links
+        VULN_ARTIFACTS=$(echo "$AUDIT_OUTPUT" | jq -r '[.vulnerabilities[]? | "[\(.severity | ascii_upcase): \(.name)](https://npmjs.com/package/\(.name))"] | unique | .[]' || true)
+
         # Output variables
         echo "hasCritical=$HAS_CRITICAL" >> "$GITHUB_OUTPUT"
         echo "hasHigh=$HAS_HIGH" >> "$GITHUB_OUTPUT"
@@ -96,9 +102,15 @@ runs:
         echo "moderateVulnerabilities=$MODERATE_LIST" >> "$GITHUB_OUTPUT"
         echo "lowVulnerabilities=$LOW_LIST" >> "$GITHUB_OUTPUT"
 
+        echo "vulnerabilitiesArtifacts<<EOF" >> "$GITHUB_OUTPUT"
+        echo "$VULN_ARTIFACTS" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+
         # Print debug info to job log
         echo "Vulnerability check finished:"
         echo "Critical: $CRITICAL_COUNT (Vulnerable packages: $CRITICAL_LIST)"
         echo "High: $HIGH_COUNT (Vulnerable packages: $HIGH_LIST)"
         echo "Moderate: $MODERATE_COUNT (Vulnerable packages: $MODERATE_LIST)"
         echo "Low: $LOW_COUNT (Vulnerable packages: $LOW_LIST)"
+        echo "Artifacts string:"
+        echo "$VULN_ARTIFACTS"

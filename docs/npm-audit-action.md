@@ -27,6 +27,7 @@ The NPM Audit action is a reusable composite GitHub Action that runs `npm audit`
 | **`highVulnerabilities`** | JSON Array | Array of package names with high vulnerabilities. |
 | **`moderateVulnerabilities`** | JSON Array | Array of package names with moderate vulnerabilities. |
 | **`lowVulnerabilities`** | JSON Array | Array of package names with low vulnerabilities. |
+| **`vulnerabilitiesArtifacts`** | String | A multi-line markdown link list of found vulnerabilities formatted for the status notifier. |
 
 ## Example Usage
 
