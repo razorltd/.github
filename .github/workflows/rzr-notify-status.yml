@@ -138,6 +138,21 @@ jobs:
               run_id: context.runId
             });
 
+            let workflowUrl = `https://github.com/${owner}/${repo}/actions`;
+            try {
+              const workflowResponse = await github.rest.actions.getWorkflow({
+                owner,
+                repo,
+                workflow_id: currentRun.data.workflow_id
+              });
+              if (workflowResponse && workflowResponse.data && workflowResponse.data.path) {
+                const workflowFileName = workflowResponse.data.path.split('/').pop();
+                workflowUrl = `https://github.com/${owner}/${repo}/actions/workflows/${workflowFileName}`;
+              }
+            } catch (e) {
+              core.info(`Could not fetch workflow details: ${e.message}`);
+            }
+
             const workflowSlug = process.env.NAME.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
             const statusToken = process.env.STATUS_TOKEN;
             let previousConclusion = 'unknown';
@@ -385,6 +400,7 @@ jobs:
             const runDetails = {
               repo: `${owner}/${repo}`,
               workflow: process.env.NAME || context.workflow,
+              workflow_url: workflowUrl,
               run_id: context.runId,
               run_number: context.runNumber,
               run_url: `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`,
@@ -604,7 +620,7 @@ jobs:
                 let reportContent = `# ${name}\n\n`;
                 reportContent += `**Product:** ${product}\n`;
                 reportContent += `**Repository:** ${runDetails.repo}\n`;
-                reportContent += `**Workflow:** ${runDetails.workflow}\n`;
+                reportContent += `**Workflow:** [${runDetails.workflow}](${runDetails.workflow_url})\n`;
                 reportContent += `**Run:** [${runDetails.run_id}](${runDetails.run_url})\n`;
                 reportContent += `**Status:** ${runDetails.status}\n\n`;
                 
