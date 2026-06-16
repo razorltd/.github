@@ -32,6 +32,15 @@ A reusable workflow that posts Slack notifications for workflow run status chang
 - `product`: The name of the product (e.g., `DataQI`).
 - `status_app_id`: The GitHub App ID used to access the `.status` repository.
 
+### NPM Audit Action
+
+A composite action that runs `npm audit` in a specified directory, parses the vulnerability report, and outputs boolean flags, counts, and lists of vulnerable packages for each severity level.
+
+[action](./.github/actions/npm-audit/action.yml)
+[documentation](./docs/npm-audit-action.md)
+
+---
+
 ## Organisation Setup
 ### Variables
 
