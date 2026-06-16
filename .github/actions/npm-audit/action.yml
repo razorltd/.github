@@ -84,7 +84,7 @@ runs:
         LOW_LIST=$(echo "$AUDIT_OUTPUT" | jq -c '[.vulnerabilities[]? | select(.severity == "low") | .name] | unique // []')
 
         # Construct vulnerabilities artifacts string formatted as markdown links
-        VULN_ARTIFACTS=$(echo "$AUDIT_OUTPUT" | jq -r '[.vulnerabilities[]? | "[\(.severity | ascii_upcase): \(.name)](https://npmjs.com/package/\(.name))"] | unique | .[]' || true)
+        VULN_ARTIFACTS=$(echo "$AUDIT_OUTPUT" | jq -r '[.vulnerabilities[]? | "[Vulnerability (\(.severity | ascii_upcase)): \(.name)](https://npmjs.com/package/\(.name))"] | unique | .[]' || true)
 
         # Output variables
         echo "hasCritical=$HAS_CRITICAL" >> "$GITHUB_OUTPUT"
