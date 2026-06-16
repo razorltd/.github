@@ -587,6 +587,7 @@ jobs:
                   name: name,
                   status: runDetails.status,
                   isFailure: runDetails.status === 'failure',
+                  isWarning: runDetails.status === 'warning',
                   runId: runDetails.run_id,
                   runNumber: runNumber,
                   timestamp: runDetails.started_at,
