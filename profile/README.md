@@ -4,7 +4,23 @@
 [![Twitter][badge_twitter]][link_twitter]
 [![LinkedIn][badge_linkedin]][link_linkedin]
 
-<p align="left">Transform your business with a bespoke AI project by Razor. We create custom artificial intelligence and data solutions that drive efficiency, automation, and real growth. DataQI is an enterprise manufacturing optimisation platform that connects machine data, AI agents, and operational workflows.</p>
+## Who We Are
+
+We are Razor. We build cutting-edge data and AI solutions. We help complex businesses automate processes, boost efficiency, and uncover real growth.
+
+## What We Do
+
+We design custom software to solve your toughest operational challenges. Our team combines advanced technology with a straightforward, human approach. We build powerful tools you can trust, without the confusing tech jargon.
+
+## Introducing DataQI
+
+DataQI is our enterprise manufacturing optimisation platform. It connects your live machine data with intelligent AI agents and everyday operational workflows.
+
+How it helps your factory:
+
+- **Connects data:** Links your machinery directly to your team.
+- **Streamlines work:** Automates tasks to reduce daily friction.
+- **Sharpens insights:** Uses AI to find instant operational wins.
 
 [badge_website]: https://img.shields.io/badge/Website-Razor_Ltd-9B4CED?style=for-the-badge&labelColor=382A5F&logo=rss&logoColor=white
 [link_website]: https://www.razor.co.uk
