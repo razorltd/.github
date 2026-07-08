@@ -4,7 +4,7 @@
 [![Twitter][badge_twitter]][link_twitter]
 [![LinkedIn][badge_linkedin]][link_linkedin]
 
-<p align="center">Razor brings companies technology that works in the real world, now and for the future. We are fanatical about the opportunities technology can offer to businesses and the progress it can bring to society.</p>
+<p align="center">Razor is The Technology Works. We design and build practical AI, data and software products that help organisations solve complex operational problems and make better decisions.</p>
 
 [badge_website]: https://img.shields.io/badge/Website%20-Razor_Ltd-c86362?style=for-the-badge&logo=rss
 [link_website]: https://www.razor.co.uk
