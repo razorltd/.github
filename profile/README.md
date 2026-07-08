@@ -4,7 +4,7 @@
 [![Twitter][badge_twitter]][link_twitter]
 [![LinkedIn][badge_linkedin]][link_linkedin]
 
-<p align="center">We design and build practical AI, data and software products for organisations with complex operational problems, from secure enterprise AI and modern data platforms to DataQI, our manufacturing-focused AI platform for turning production data into clearer decisions, fewer bottlenecks and measurable operational improvement.</p>
+<p align="center">Transform your business with a bespoke AI project by Razor. We create custom artificial intelligence and data solutions that drive efficiency, automation, and real growth. DataQI is an enterprise manufacturing optimisation platform that connects machine data, AI agents, and operational workflows.</p>
 
 [badge_website]: https://img.shields.io/badge/Website%20-Razor_Ltd-c86362?style=for-the-badge&logo=rss
 [link_website]: https://www.razor.co.uk
