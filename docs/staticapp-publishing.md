@@ -48,14 +48,14 @@ publish:
   uses: razorltd/.github/.github/workflows/publish-static-site.yml@main
   with:
     site-name: dataqi-internal-docs
-    site-hostname: dataqi-internal-docs.razor.co.uk
     artifact-name: internal-docs-static
 ```
 
 Only push and manual-dispatch runs are eligible. Artifacts must come from the
-same run. Optional `site-hostname` changes the reported URL only; the default is
-`<site-name>-internal.razor.co.uk`. A custom hostname needs a matching NGINX alias
-in GitOps as well as DNS and Access. It does not change the content directory.
+same run. The publisher reports the site name and release; hostnames are configured
+separately in NGINX, Cloudflare DNS and Access. The standard NGINX route is
+`<site-name>-internal.razor.co.uk`. The pilot uses the explicit NGINX alias
+`dataqi-internal-docs.razor.co.uk`, pointing to the `dataqi-internal-docs` directory.
 No secrets inheritance is needed. Existing Azure-specific routing or
 authentication config does not configure NGINX: test generated URL paths,
 redirects and any SPA requirements during the separately approved migration.
