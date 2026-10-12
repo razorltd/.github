@@ -1,0 +1,93 @@
+name: Publish Razor static site
+on:
+  workflow_call:
+    inputs:
+      site-name:
+        description: Site name without -internal.razor.co.uk
+        required: true
+        type: string
+      artifact-name:
+        description: Same-run artifact containing index.html at its root
+        required: true
+        type: string
+      keep-releases:
+        description: Number of releases to retain, including current (2–20)
+        default: 3
+        type: number
+    outputs:
+      url:
+        description: Published site URL
+        value: ${{ jobs.publish.outputs.url }}
+permissions:
+  actions: read
+  contents: read
+jobs:
+  publish:
+    if: github.repository_owner == 'razorltd' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: razor-onprem-staticapp-publishers
+    timeout-minutes: 15
+    concurrency:
+      group: staticapp-publish-${{ inputs.site-name }}
+      cancel-in-progress: false
+    outputs:
+      url: ${{ steps.publish.outputs.url }}
+    env:
+      SITE_NAME: ${{ inputs.site-name }}
+      KEEP_RELEASES: ${{ inputs.keep-releases }}
+      ARTIFACT_PATH: ${{ runner.temp }}/staticapp-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Download built content
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ env.ARTIFACT_PATH }}
+      - name: Publish and prune old releases
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SITE_NAME" =~ ^[a-z0-9]([a-z0-9-]{0,45}[a-z0-9])?$ ]] || { echo 'Invalid site name'; exit 1; }
+          [[ "$KEEP_RELEASES" =~ ^([2-9]|1[0-9]|20)$ ]] || { echo 'keep-releases must be 2–20'; exit 1; }
+          [[ -f "$ARTIFACT_PATH/index.html" && ! -L "$ARTIFACT_PATH" ]] || { echo 'Missing root index.html'; exit 1; }
+          [[ -z "$(find "$ARTIFACT_PATH" -mindepth 1 ! -type f ! -type d -print -quit)" ]] || { echo 'Symlinks/special files are unsupported'; exit 1; }
+          site="/srv/sites/$SITE_NAME"
+          releases="$site/releases"
+          release="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          [[ ! -L "$site" && ! -L "$releases" ]] || { echo 'Unexpected directory symlink'; exit 1; }
+          mkdir -p "$releases"
+          if [[ -L "$site/current" ]]; then
+            previous="$(readlink "$site/current")"
+            [[ "$previous" =~ ^releases/([0-9]+)-([0-9]+)$ ]] || { echo 'Unexpected current target'; exit 1; }
+            previous_run="${BASH_REMATCH[1]}"
+            previous_attempt="${BASH_REMATCH[2]}"
+            if (( previous_run > GITHUB_RUN_ID || (previous_run == GITHUB_RUN_ID && previous_attempt >= GITHUB_RUN_ATTEMPT) )); then
+              echo 'Refusing an older or already published run'; exit 1
+            fi
+          elif [[ -e "$site/current" ]]; then
+            echo 'Current must be a symlink'; exit 1
+          fi
+          [[ ! -e "$releases/$release" ]] || { echo 'Release already exists'; exit 1; }
+          staging="$(mktemp -d "$releases/.staging-XXXXXX")"
+          link="$site/.current-$release"
+          trap 'rm -rf -- "$staging"; rm -f -- "$link"' EXIT
+          cp -R -- "$ARTIFACT_PATH/." "$staging/"
+          find "$staging" -type d -exec chmod 755 {} +
+          find "$staging" -type f -exec chmod 644 {} +
+          mv -T -- "$staging" "$releases/$release"
+          ln -s -- "releases/$release" "$link"
+          mv -Tf -- "$link" "$site/current"
+          # Only numeric release directories are eligible. Publish before deleting.
+          find "$releases" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' |
+            grep -E '^[0-9]+-[0-9]+$' |
+            sort -t- -k1,1nr -k2,2nr |
+            tail -n "+$((KEEP_RELEASES + 1))" |
+            while IFS= read -r old; do
+              [[ "$old" == "$release" ]] || rm -rf -- "$releases/$old"
+            done
+          url="https://$SITE_NAME-internal.razor.co.uk"
+          printf 'url=%s\n' "$url" >> "$GITHUB_OUTPUT"
+          printf 'Published [%s](%s), release `%s`; retaining %s releases.\n' "$SITE_NAME" "$url" "$release" "$KEEP_RELEASES" >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove downloaded content
+        if: always()
+        shell: bash
+        run: rm -rf -- "$ARTIFACT_PATH"
