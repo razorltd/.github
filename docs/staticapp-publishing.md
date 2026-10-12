@@ -11,23 +11,11 @@ No Cloudflare token or Kubernetes credentials are required in caller repositorie
 Restrict the publisher runner group to selected trusted private/internal repos.
 If available, restrict selected workflow access to
 `razorltd/.github/.github/workflows/publish-static-site.yml@refs/heads/main`.
-Otherwise eligible repos can bypass this workflow and write all sites; the
-repository/ref check below is a guardrail, not storage isolation.
-
-Create environment `staticapp-publishing` in each caller repository. Restrict
-deployment branches to the approved branch; add reviewers if desired. Set its
-environment variable `STATICAPP_SITE_REGISTRY` to a JSON object mapping site
-names to exact repository and ref. For the proposed pilot:
-
-```json
-{"dataqi-agent-docs":{"repository":"razorltd/dataqi-agent","ref":"refs/heads/develop"}}
-```
-
-This example is not an active registration. The site name and hostname need
-approval and Cloudflare DNS/office-IP-or-AAD Access setup before the pilot.
-Keep the actual registry in private GitHub configuration. The `.github` repo
-is public. Repository administrators can change variables; restrict runner
-access and protect the publishing branch accordingly.
+Eligible repositories share write access to all sites. Use distinct site names
+and protect caller workflows/branches. No site registry, environment, variable
+or repository secret is required. Pass a site name and artifact name; the first
+publish creates its directory. Per-site Cloudflare DNS and office-IP-or-AAD
+Access setup is still needed before external access.
 
 ## Proposed dataqi-agent caller
 
@@ -70,9 +58,9 @@ redirects and any SPA requirements during the separately approved migration.
 
 ## Release behaviour and limits
 
-Root index.html is required; symlinks, special/hidden files, more than 20,000
-files or more than 512 MiB are rejected. Limits are checked after download,
-so runner disk limits also matter. Files receive 0644 and directories 0755.
+Root index.html is required; symlinks and special files are rejected.
+Files receive 0644 and directories 0755. Publishing uses Bash and standard
+Linux tools (`cp`, `find`, `chmod`, `ln`, `mv`).
 Complete releases are staged on NFS, then the relative current symlink is
 atomically replaced. Current content remains intact on a failed copy.
 
@@ -81,9 +69,12 @@ maxRunners=1: that serialises writers across repositories. An older run cannot
 replace a newer successful release; reruns have their own attempt number.
 Do not add other writers or increase scale without a storage-side lock design.
 
-Releases are retained; no automatic deletion is performed. Establish a bounded
-retention procedure before sustained use, and monitor NFS capacity. Keeping old
-release directories alone does not preserve unversioned asset URLs after a
+After successful publication, keep the three newest releases (including current)
+and delete older numeric release directories. Optional `keep-releases` accepts
+2–20; default 3. The current release is never pruned. This bounds version count,
+not byte usage; monitor NFS capacity because large artifacts can still fill it.
+Failed copies clean their staging directory without replacing current content.
+Keeping old release directories alone does not preserve unversioned asset URLs after a
 switch: sites needing that must publish release-qualified assets or explicitly
 retain old hashed assets. Rollback is a separately authorised atomic replacement
 of current with a previous release; an older workflow rerun is not a rollback.
