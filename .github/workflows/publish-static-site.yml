@@ -3,12 +3,16 @@ on:
   workflow_call:
     inputs:
       site-name:
-        description: Site name without -internal.razor.co.uk
+        description: Content directory name (default hostname is <site>-internal.razor.co.uk)
         required: true
         type: string
       artifact-name:
         description: Same-run artifact containing index.html at its root
         required: true
+        type: string
+      site-hostname:
+        description: Optional preconfigured hostname under razor.co.uk (reported URL only)
+        default: ''
         type: string
       keep-releases:
         description: Number of releases to retain, including current (2–20)
@@ -33,9 +37,12 @@ jobs:
       url: ${{ steps.publish.outputs.url }}
     env:
       SITE_NAME: ${{ inputs.site-name }}
+      SITE_HOSTNAME: ${{ inputs.site-hostname }}
       KEEP_RELEASES: ${{ inputs.keep-releases }}
-      ARTIFACT_PATH: ${{ runner.temp }}/staticapp-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
+      - name: Set artifact directory
+        shell: bash
+        run: printf 'ARTIFACT_PATH=%s\n' "$RUNNER_TEMP/staticapp-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
       - name: Download built content
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -47,6 +54,8 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$SITE_NAME" =~ ^[a-z0-9]([a-z0-9-]{0,45}[a-z0-9])?$ ]] || { echo 'Invalid site name'; exit 1; }
+          hostname="${SITE_HOSTNAME:-$SITE_NAME-internal.razor.co.uk}"
+          [[ "$hostname" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.razor\.co\.uk$ ]] || { echo 'Invalid site hostname'; exit 1; }
           [[ "$KEEP_RELEASES" =~ ^([2-9]|1[0-9]|20)$ ]] || { echo 'keep-releases must be 2–20'; exit 1; }
           [[ -f "$ARTIFACT_PATH/index.html" && ! -L "$ARTIFACT_PATH" ]] || { echo 'Missing root index.html'; exit 1; }
           [[ -z "$(find "$ARTIFACT_PATH" -mindepth 1 ! -type f ! -type d -print -quit)" ]] || { echo 'Symlinks/special files are unsupported'; exit 1; }
@@ -84,7 +93,7 @@ jobs:
             while IFS= read -r old; do
               [[ "$old" == "$release" ]] || rm -rf -- "$releases/$old"
             done
-          url="https://$SITE_NAME-internal.razor.co.uk"
+          url="https://$hostname"
           printf 'url=%s\n' "$url" >> "$GITHUB_OUTPUT"
           printf 'Published [%s](%s), release `%s`; retaining %s releases.\n' "$SITE_NAME" "$url" "$release" "$KEEP_RELEASES" >> "$GITHUB_STEP_SUMMARY"
       - name: Remove downloaded content
