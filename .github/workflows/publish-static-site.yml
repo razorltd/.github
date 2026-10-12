@@ -1,0 +1,147 @@
+name: Publish Razor static site
+
+on:
+  workflow_call:
+    inputs:
+      site-name:
+        description: Registered site name (without -internal.razor.co.uk)
+        required: true
+        type: string
+      artifact-name:
+        description: Artifact from the same workflow run, containing index.html at its root
+        required: true
+        type: string
+    outputs:
+      url:
+        description: Published site URL
+        value: ${{ jobs.publish.outputs.url }}
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  publish:
+    # No PR, workflow_run or cross-run artifact publishing.
+    if: github.repository_owner == 'razorltd' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: razor-onprem-staticapp-publishers
+    timeout-minutes: 15
+    environment: staticapp-publishing
+    concurrency:
+      group: staticapp-publish-${{ inputs.site-name }}
+      cancel-in-progress: false
+    outputs:
+      url: ${{ steps.publish.outputs.url }}
+    env:
+      SITE_NAME: ${{ inputs.site-name }}
+      SITE_REGISTRY: ${{ vars.STATICAPP_SITE_REGISTRY }}
+      CALLER_REPOSITORY: ${{ github.repository }}
+      CALLER_REF: ${{ github.ref }}
+      RELEASE_SHA: ${{ github.sha }}
+    steps:
+      - name: Authorise repository and ref
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          site = os.environ['SITE_NAME']
+          if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,45}[a-z0-9])?', site):
+              raise SystemExit('Invalid site name')
+          registry = json.loads(os.environ.get('SITE_REGISTRY') or '{}')
+          expected = registry.get(site, {})
+          if (expected.get('repository'), expected.get('ref')) != (os.environ['CALLER_REPOSITORY'], os.environ['CALLER_REF']):
+              raise SystemExit('Repository/ref is not authorised for this site')
+          PY
+      - name: Download built content
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ runner.temp }}/staticapp-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Publish complete release
+        id: publish
+        shell: bash
+        env:
+          ARTIFACT_PATH: ${{ runner.temp }}/staticapp-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, shutil, stat, uuid
+          from pathlib import Path
+
+          def validate(source):
+              if source.is_symlink() or not source.is_dir():
+                  raise ValueError('Artifact must be a directory')
+              files, size = 0, 0
+              for path in source.rglob('*'):
+                  mode = path.lstat().st_mode
+                  if path.is_symlink() or not (stat.S_ISREG(mode) or stat.S_ISDIR(mode)):
+                      raise ValueError('Symlinks and special files are forbidden')
+                  if any(part.startswith('.') for part in path.relative_to(source).parts):
+                      raise ValueError('Hidden files are forbidden')
+                  if path.is_file():
+                      files += 1
+                      size += path.stat().st_size
+              if files > 20000 or size > 512 * 1024 * 1024:
+                  raise ValueError('Artifact exceeds 20,000 files or 512 MiB')
+              if not (source / 'index.html').is_file():
+                  raise ValueError('Artifact must contain root index.html')
+
+          def publish(source, root, site, run_id, attempt, sha):
+              if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,45}[a-z0-9])?', site):
+                  raise ValueError('Invalid site name')
+              validate(source)
+              root = root.resolve(strict=True)
+              directory = root / site
+              if directory.is_symlink():
+                  raise ValueError('Site directory must not be a symlink')
+              directory.mkdir(exist_ok=True, mode=0o755)
+              releases = directory / 'releases'
+              if releases.is_symlink():
+                  raise ValueError('Release directory must not be a symlink')
+              releases.mkdir(exist_ok=True, mode=0o755)
+              current = directory / 'current'
+              if current.exists() and not current.is_symlink():
+                  raise ValueError('Current must be a symlink')
+              if current.is_symlink():
+                  target = current.resolve(strict=True)
+                  if target.parent != releases.resolve():
+                      raise ValueError('Current points outside releases')
+                  previous = json.loads((target / '.publication.json').read_text())
+                  if (int(previous['run_id']), int(previous['attempt'])) >= (run_id, attempt):
+                      raise ValueError('Refusing an older or already published run')
+              release = f'{run_id}-{attempt}'
+              destination = releases / release
+              staging = releases / f'.staging-{uuid.uuid4().hex}'
+              link = directory / f'.current-{uuid.uuid4().hex}'
+              try:
+                  shutil.copytree(source, staging)
+                  for path in [staging, *staging.rglob('*')]:
+                      path.chmod(0o755 if path.is_dir() else 0o644)
+                  (staging / '.publication.json').write_text(json.dumps({'run_id': run_id, 'attempt': attempt, 'sha': sha}))
+                  staging.rename(destination)
+                  link.symlink_to(f'releases/{release}', target_is_directory=True)
+                  os.replace(link, current)
+              finally:
+                  if link.is_symlink(): link.unlink()
+                  if staging.exists(): shutil.rmtree(staging)
+              return release
+
+          if __name__ == '__main__':
+              site = os.environ['SITE_NAME']
+              release = publish(Path(os.environ['ARTIFACT_PATH']), Path('/srv/sites'), site,
+                                int(os.environ['GITHUB_RUN_ID']), int(os.environ['GITHUB_RUN_ATTEMPT']), os.environ['RELEASE_SHA'])
+              url = f'https://{site}-internal.razor.co.uk'
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+                  output.write(f'url={url}\n')
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+                  summary.write(f'Published [{site}]({url}), release `{release}`.\n')
+          PY
+      - name: Remove downloaded content
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, shutil
+          from pathlib import Path
+          path = Path(os.environ['RUNNER_TEMP']) / f"staticapp-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
+          if path.is_dir() and not path.is_symlink(): shutil.rmtree(path)
+          PY

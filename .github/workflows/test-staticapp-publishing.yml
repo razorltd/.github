@@ -1,0 +1,22 @@
+name: Test static publishing
+on:
+  pull_request:
+    paths:
+      - .github/workflows/publish-static-site.yml
+      - .github/workflows/test-staticapp-publishing.yml
+      - tests/test_staticapp_publish.py
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/publish-static-site.yml
+      - .github/workflows/test-staticapp-publishing.yml
+      - tests/test_staticapp_publish.py
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: python3 -m pip install PyYAML==6.0.3
+      - run: python3 -m unittest discover -s tests -v
