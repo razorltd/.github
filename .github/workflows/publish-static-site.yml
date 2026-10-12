@@ -3,7 +3,7 @@ on:
   workflow_call:
     inputs:
       site-name:
-        description: Site name without -internal.razor.co.uk
+        description: Content directory name under /srv/sites
         required: true
         type: string
       artifact-name:
@@ -14,10 +14,6 @@ on:
         description: Number of releases to retain, including current (2–20)
         default: 3
         type: number
-    outputs:
-      url:
-        description: Published site URL
-        value: ${{ jobs.publish.outputs.url }}
 permissions:
   actions: read
   contents: read
@@ -29,20 +25,19 @@ jobs:
     concurrency:
       group: staticapp-publish-${{ inputs.site-name }}
       cancel-in-progress: false
-    outputs:
-      url: ${{ steps.publish.outputs.url }}
     env:
       SITE_NAME: ${{ inputs.site-name }}
       KEEP_RELEASES: ${{ inputs.keep-releases }}
-      ARTIFACT_PATH: ${{ runner.temp }}/staticapp-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
+      - name: Set artifact directory
+        shell: bash
+        run: printf 'ARTIFACT_PATH=%s\n' "$RUNNER_TEMP/staticapp-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
       - name: Download built content
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: ${{ inputs.artifact-name }}
           path: ${{ env.ARTIFACT_PATH }}
       - name: Publish and prune old releases
-        id: publish
         shell: bash
         run: |
           set -euo pipefail
@@ -84,9 +79,7 @@ jobs:
             while IFS= read -r old; do
               [[ "$old" == "$release" ]] || rm -rf -- "$releases/$old"
             done
-          url="https://$SITE_NAME-internal.razor.co.uk"
-          printf 'url=%s\n' "$url" >> "$GITHUB_OUTPUT"
-          printf 'Published [%s](%s), release `%s`; retaining %s releases.\n' "$SITE_NAME" "$url" "$release" "$KEEP_RELEASES" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Published site `%s`, release `%s`; retaining %s releases.\n' "$SITE_NAME" "$release" "$KEEP_RELEASES" >> "$GITHUB_STEP_SUMMARY"
       - name: Remove downloaded content
         if: always()
         shell: bash

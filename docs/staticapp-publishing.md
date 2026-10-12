@@ -47,12 +47,17 @@ publish:
     contents: read
   uses: razorltd/.github/.github/workflows/publish-static-site.yml@main
   with:
-    site-name: dataqi-agent-docs
+    site-name: dataqi-internal-docs
     artifact-name: internal-docs-static
 ```
 
 Only push and manual-dispatch runs are eligible. Artifacts must come from the
-same run. No secrets inheritance is needed. Existing Azure-specific routing or
+same run. The publisher reports the site name and release; hostnames are configured
+separately in NGINX, Cloudflare DNS and Access. The standard NGINX route is
+`<site-name>.razor.co.uk`: the complete hostname label matches the content
+directory. For example, `dataqi-internal-docs.razor.co.uk` maps to
+`/srv/sites/dataqi-internal-docs/current`. No per-site GitOps edit is needed.
+No secrets inheritance is needed. Existing Azure-specific routing or
 authentication config does not configure NGINX: test generated URL paths,
 redirects and any SPA requirements during the separately approved migration.
 
@@ -71,7 +76,7 @@ Do not add other writers or increase scale without a storage-side lock design.
 
 After successful publication, keep the three newest releases (including current)
 and delete older numeric release directories. Optional `keep-releases` accepts
-2–20; default 3. The current release is never pruned. This bounds version count,
+2â€“20; default 3. The current release is never pruned. This bounds version count,
 not byte usage; monitor NFS capacity because large artifacts can still fill it.
 Failed copies clean their staging directory without replacing current content.
 Keeping old release directories alone does not preserve unversioned asset URLs after a
